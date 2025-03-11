@@ -1,5 +1,5 @@
 # Ice Highway Builder
-An AFKable ice highway builder addon by K-K-L-L designed to work with Meteor Client.
+An AFKable ice highway builder addon designed to work with Meteor Client.
 
 ## Requirements
 - Meteor Client
@@ -28,11 +28,5 @@ An AFKable ice highway builder addon by K-K-L-L designed to work with Meteor Cli
    - Restock blue ice
    - Repair pickaxes with nether quartz when all pickaxes are used
    - Mine blue ice when all shulkers have been emptied
-
----
-
-For more information or issues, please DM me on Discord (theorangedot) or open a new issue.
-
----
 
 Operation Ice Rail Discord Server: https://discord.gg/udDjPEGupP
