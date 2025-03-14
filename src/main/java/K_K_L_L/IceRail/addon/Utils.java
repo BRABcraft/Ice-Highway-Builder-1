@@ -198,7 +198,7 @@ public class Utils {
         if (Type == 0) {
             offset = 1;
         } else {
-            offset = 7;
+            offset = 4;
         }
         switch (getPlayerDirection()) {
             case NORTH -> setHighwayCoords(new BlockPos(playerX, playerY, mc.player.getBlockZ() + offset));
