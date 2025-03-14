@@ -909,11 +909,17 @@ public class IceHighwayBuilder extends Module {
         Direction direction = getPlayerDirection();
 
         switch (direction) {
-            case Direction.NORTH, Direction.EAST:
+            case Direction.NORTH:
+                mc.player.setYaw(135);
+                break;
+            case Direction.EAST:
                 mc.player.setYaw(-135);
                 break;
-            case Direction.SOUTH, Direction.WEST:
-                mc.player.setYaw(135);
+            case Direction.WEST:
+                mc.player.setYaw(45);
+                break;
+            case Direction.SOUTH:
+                mc.player.setYaw(-45);
                 break;
         }
     }
