@@ -1,14 +1,16 @@
 {
   "schemaVersion": 1,
   "id": "ice-highway-builder",
-  "version": "1.2.0",
+  "version": "1.2.4",
   "name": "Ice Highway Builder",
-  "description": "An AFKable ice highway builder addon made by K-K-L-L (Discord:theorangedot).",
+  "description": "An AFKable ice highway builder addon made for IceRail builders.",
   "authors": [
-    "K-K-L-L (Discord:theorangedot)"
+    "K-K-L-L",
+    "BrabCraft",
+    "musheck"
   ],
   "contact": {
-    "repo": "https://github.com/K-K-L-L/Ice-Highway-Builder"
+    "repo": "https://github.com/musheck/Ice-Highway-Builder"
   },
   "icon": "assets/icon.png",
   "environment": "client",

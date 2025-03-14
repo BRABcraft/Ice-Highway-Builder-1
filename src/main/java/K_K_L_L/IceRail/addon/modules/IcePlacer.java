@@ -23,6 +23,8 @@ public class IcePlacer extends Module {
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
+        assert mc.world != null;
+        assert mc.player != null;
         if (isGoingToHighway || getIsEating()) return;
 
         Direction direction = getPlayerDirection();
@@ -50,17 +52,17 @@ public class IcePlacer extends Module {
                 shouldPlace = Math.abs(mc.player.getBlockZ()) % 2 == 0;
             }
             case WEST -> {
-                targetPos = new BlockPos(mc.player.getBlockX() - 2 , playerY + 1, playerZ - 1);
-                targetPos2 = new BlockPos(mc.player.getBlockX() - 2 , playerY + 1, playerZ - 2);
-                guardrail1 = new BlockPos(mc.player.getBlockX() - 2 , playerY + 2, playerZ - 2);
-                guardrail2 = new BlockPos(mc.player.getBlockX() - 2 , playerY + 2, playerZ + 1);
+                targetPos = new BlockPos(mc.player.getBlockX() - 2, playerY + 1, playerZ - 1);
+                targetPos2 = new BlockPos(mc.player.getBlockX() - 2, playerY + 1, playerZ - 2);
+                guardrail1 = new BlockPos(mc.player.getBlockX() - 2, playerY + 2, playerZ - 2);
+                guardrail2 = new BlockPos(mc.player.getBlockX() - 2, playerY + 2, playerZ + 1);
                 shouldPlace = Math.abs(mc.player.getBlockX()) % 2 == 0;
             }
             case EAST -> {
                 targetPos = new BlockPos(mc.player.getBlockX() + 2, playerY + 1, playerZ - 1);
-                targetPos2 = new BlockPos(mc.player.getBlockX() + 2 , playerY + 1, playerZ - 2);
-                guardrail1 = new BlockPos(mc.player.getBlockX() + 2 , playerY + 2, playerZ - 2);
-                guardrail2 = new BlockPos(mc.player.getBlockX() + 2 , playerY + 2, playerZ + 1);
+                targetPos2 = new BlockPos(mc.player.getBlockX() + 2, playerY + 1, playerZ - 2);
+                guardrail1 = new BlockPos(mc.player.getBlockX() + 2, playerY + 2, playerZ - 2);
+                guardrail2 = new BlockPos(mc.player.getBlockX() + 2, playerY + 2, playerZ + 1);
                 shouldPlace = Math.abs(mc.player.getBlockX()) % 2 == 0;
             }
             default -> {

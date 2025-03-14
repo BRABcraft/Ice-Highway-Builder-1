@@ -34,6 +34,7 @@ import K_K_L_L.IceRail.addon.IceRail;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.BiPredicate;
 
 import static K_K_L_L.IceRail.addon.modules.IceHighwayBuilder.needsToScaffold;
@@ -133,6 +134,7 @@ public class IceRailAutoEat extends Module {
 
     @EventHandler(priority = EventPriority.LOW)
     private void onTick(TickEvent.Pre event) {
+        assert mc.player != null;
         if (needsToScaffold()) return;
         if (!isActive()) return;
         Module iceHighwayBuilder = Modules.get().get("ice-highway-builder");
@@ -188,6 +190,7 @@ public class IceRailAutoEat extends Module {
     }
 
     private void startEating() {
+        assert mc.player != null;
         prevSlot = mc.player.getInventory().selectedSlot;
         eat();
 
@@ -288,6 +291,7 @@ public class IceRailAutoEat extends Module {
     }
 
     private int findSlot() {
+        assert mc.player != null;
         int slot = -1;
         int bestHunger = -1;
 
@@ -309,12 +313,12 @@ public class IceRailAutoEat extends Module {
             // Skip enchanted golden apple if not burning or has fire resistance
             if (item == Items.ENCHANTED_GOLDEN_APPLE) continue;
 
+            // Skip if item is in blacklist
+            if (blacklist.get().contains(item)) continue;
+
             // Check if hunger value is better
             int hunger = foodComponent.nutrition();
             if (hunger > bestHunger) {
-                // Skip if item is in blacklist
-                if (blacklist.get().contains(item)) continue;
-
                 // Select the current item
                 slot = i;
                 bestHunger = hunger;
@@ -325,7 +329,7 @@ public class IceRailAutoEat extends Module {
         Item offHandItem = mc.player.getOffHandStack().getItem();
         if (offHandItem.getComponents().get(DataComponentTypes.FOOD) != null &&
             !blacklist.get().contains(offHandItem) &&
-            offHandItem.getComponents().get(DataComponentTypes.FOOD).nutrition() > bestHunger &&
+            Objects.requireNonNull(offHandItem.getComponents().get(DataComponentTypes.FOOD)).nutrition() > bestHunger &&
             !(offHandItem == Items.ENCHANTED_GOLDEN_APPLE && !mc.player.isOnFire()))
             slot = SlotUtils.OFFHAND;
 
