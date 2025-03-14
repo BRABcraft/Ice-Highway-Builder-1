@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "ice-highway-builder",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "name": "Ice Highway Builder",
   "description": "An AFKable ice highway builder addon made for IceRail builders.",
   "authors": [
