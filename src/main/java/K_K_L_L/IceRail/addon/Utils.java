@@ -141,6 +141,31 @@ public class Utils {
         return placeBlock(pos, direction);
     }
 
+    public static boolean airPlace(BlockPos pos, Direction direction) {
+        if (mc.player == null || mc.getNetworkHandler() == null || mc.interactionManager == null) return false;
+
+        mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.SWAP_ITEM_WITH_OFFHAND, BlockPos.ORIGIN, direction));
+
+        Hand hand = Hand.OFF_HAND;
+
+        BlockHitResult hit = new BlockHitResult(Vec3d.ofCenter(pos), direction.getOpposite(), pos, true);
+
+        mc.interactionManager.interactBlock(mc.player, hand, hit);
+
+        mc.player.swingHand(hand, false);
+
+        mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.SWAP_ITEM_WITH_OFFHAND, BlockPos.ORIGIN, direction));
+
+        return true;
+    }
+
+    public static boolean airPlace(Item item, BlockPos pos, Direction direction) {
+        if (!canPlaceBlock(pos, true, Block.getBlockFromItem(item))) return false;
+        switchToItem(item);
+
+        return airPlace(pos, direction);
+    }
+
     public static void openAndCloseInventory() { // This is to fix Ice Rail Auto Replenish not being able to work unless the inventory has been opened once
         if (mc.player == null || mc.getNetworkHandler() == null) return;
 
