@@ -59,6 +59,7 @@ public class IceHighwayBuilder extends Module {
     public static boolean hasOpenedShulker;
     public static Integer slot_number;
     public static boolean wasRestocking;
+    public static boolean stackRecentlyStolen;
     public static BlockPos shulkerBlockPos;
     public static boolean isBreakingShulker;
     public static boolean isPostRestocking;
@@ -290,6 +291,7 @@ public class IceHighwayBuilder extends Module {
         swapSlot = -1;
         isClearingInventory = false;
         oldYaw = 0;
+        stackRecentlyStolen = false;
     }
 
     private void steal(ScreenHandler handler, int slot_number) {
@@ -300,6 +302,7 @@ public class IceHighwayBuilder extends Module {
         if (handler.getSlot(i).hasStack() && Utils.canUpdate()) {
             InvUtils.shiftClick().slotId(i);
             stacksStolen++;
+            stackRecentlyStolen = true;
         }
     }
 
@@ -390,17 +393,19 @@ public class IceHighwayBuilder extends Module {
             isRestocking = false;
         } else {
             ScreenHandler handler = mc.player.currentScreenHandler;
-            if (hasOpenedShulker) {
+            if (stackRecentlyStolen) {
                 if (stealingDelay < 5) { // To add a 5 tick delay
                     stealingDelay++;
                     return;
                 }
-                if (restockingType==1) {
-                    InvUtils.quickSwap().fromId(0).toId(slotNumber);
-                    stacksStolen ++;
-                } else {
-                    steal(handler, slotNumber);
-                }
+                stackRecentlyStolen = false;
+            }
+            if (restockingType == 1) {
+                InvUtils.quickSwap().fromId(0).toId(slotNumber);
+                stacksStolen++;
+            }
+            else {
+                steal(handler, slotNumber);
                 slotNumber++;
                 stealingDelay = 0;
             }
@@ -818,7 +823,26 @@ public class IceHighwayBuilder extends Module {
         }
         int airBlocks = 0;
         BlockPos block1 = null;
+        int startBlock = getStartBlock(direction);
+        for (int i = 1; i <= 3; i++) {
+            switch (direction) {
+                case WEST -> block1 = new BlockPos(startBlock + i * 2, playerY+1, playerZ - 1);
+                case EAST -> block1 = new BlockPos(startBlock - i * 2, playerY+1, playerZ - 1);
+                case NORTH -> block1 = new BlockPos(playerX + 1, playerY+1, startBlock + i * 2);
+                case SOUTH -> block1 = new BlockPos(playerX + 1, playerY+1, startBlock - i * 2);
+
+            }
+            assert mc.world != null;
+            if (Blocks.BLUE_ICE != mc.world.getBlockState(block1).getBlock()) {
+                airBlocks++;
+            }
+        }
+        return airBlocks > 0 && airBlocks < 3;
+    }
+
+    private int getStartBlock(Direction direction) {
         int startBlock = 0;
+        assert mc.player != null;
         switch (direction) {
             case NORTH -> {
                 if (Math.abs(mc.player.getBlockZ()) % 2 == 0) {
@@ -849,20 +873,7 @@ public class IceHighwayBuilder extends Module {
                 }
             }
         }
-        for (int i = 1; i <= 3; i++) {
-            switch (direction) {
-                case WEST -> block1 = new BlockPos(startBlock + i * 2, playerY+1, playerZ - 1);
-                case EAST -> block1 = new BlockPos(startBlock - i * 2, playerY+1, playerZ - 1);
-                case NORTH -> block1 = new BlockPos(playerX + 1, playerY+1, startBlock + i * 2);
-                case SOUTH -> block1 = new BlockPos(playerX + 1, playerY+1, startBlock - i * 2);
-
-            }
-            assert mc.world != null;
-            if (Blocks.BLUE_ICE != mc.world.getBlockState(block1).getBlock()) {
-                airBlocks++;
-            }
-        }
-        return airBlocks > 0 && airBlocks < 3;
+        return startBlock;
     }
 
     private void handleInvalidPosition(int Type) {
@@ -944,7 +955,7 @@ public class IceHighwayBuilder extends Module {
         }
 
         Module iceRailAutoEat = Modules.get().get("ice-rail-auto-eat");
-        if (disableAutoEatAfterDigging.get() && iceRailAutoEat != null && iceRailAutoEat.isActive())
+        if (disableAutoEatAfterDigging.get() && iceRailAutoEat.isActive())
             iceRailAutoEat.toggle();
     }
     public Setting<List<Item>> getBlacklist(){
