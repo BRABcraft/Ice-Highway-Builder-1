@@ -17,9 +17,7 @@ import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.meteorclient.utils.player.PlayerUtils;
 import meteordevelopment.meteorclient.utils.player.Rotations;
 import meteordevelopment.meteorclient.utils.world.BlockUtils;
-import meteordevelopment.meteorclient.utils.player.SlotUtils;
 import meteordevelopment.orbit.EventHandler;
-import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.ShulkerBoxBlock;
 import net.minecraft.client.MinecraftClient;
@@ -51,8 +49,6 @@ public class IceHighwayBuilder extends Module {
     public static boolean wasEchestFarmerActive = false;
     public static boolean baritoneCalled;
     public static Direction playerDirection;
-    private float playerYaw;
-    private float playerPitch;
     public static boolean isRestocking;
     public static Integer restockingType;
     public static boolean isWallDone;
@@ -63,6 +59,7 @@ public class IceHighwayBuilder extends Module {
     public static boolean hasOpenedShulker;
     public static Integer slot_number;
     public static boolean wasRestocking;
+    public static boolean stackRecentlyStolen;
     public static BlockPos shulkerBlockPos;
     public static boolean isBreakingShulker;
     public static boolean isPostRestocking;
@@ -226,15 +223,10 @@ public class IceHighwayBuilder extends Module {
 
         assert mc.player != null;
         playerDirection = getPlayerCurrentDirection();
-        playerPitch = 0;
     }
 
     private boolean validateInitialConditions() {
-        if (mc.player == null || mc.world == null) return false;
-
-        boolean flag = true;
-
-        return flag;
+        return mc.player != null && mc.world != null;
     }
 
     @Override
@@ -299,6 +291,7 @@ public class IceHighwayBuilder extends Module {
         swapSlot = -1;
         isClearingInventory = false;
         oldYaw = 0;
+        stackRecentlyStolen = false;
     }
 
     private void steal(ScreenHandler handler, int slot_number) {
@@ -309,6 +302,7 @@ public class IceHighwayBuilder extends Module {
         if (handler.getSlot(i).hasStack() && Utils.canUpdate()) {
             InvUtils.shiftClick().slotId(i);
             stacksStolen++;
+            stackRecentlyStolen = true;
         }
     }
 
@@ -399,17 +393,19 @@ public class IceHighwayBuilder extends Module {
             isRestocking = false;
         } else {
             ScreenHandler handler = mc.player.currentScreenHandler;
-            if (hasOpenedShulker) {
+            if (stackRecentlyStolen) {
                 if (stealingDelay < 5) { // To add a 5 tick delay
                     stealingDelay++;
                     return;
                 }
-                if (restockingType==1) {
-                    InvUtils.quickSwap().fromId(0).toId(slotNumber);
-                    stacksStolen ++;
-                } else {
-                    steal(handler, slotNumber);
-                }
+                stackRecentlyStolen = false;
+            }
+            if (restockingType == 1) {
+                InvUtils.quickSwap().fromId(0).toId(slotNumber);
+                stacksStolen++;
+            }
+            else {
+                steal(handler, slotNumber);
                 slotNumber++;
                 stealingDelay = 0;
             }
@@ -417,6 +413,7 @@ public class IceHighwayBuilder extends Module {
     }
 
     private @NotNull BlockPos getBlockPos() {
+        assert mc.player != null;
         int offset = 2;
         return switch (getPlayerDirection()) {
             case NORTH -> new BlockPos(playerX, playerY, mc.player.getBlockZ() - offset);
@@ -445,7 +442,7 @@ public class IceHighwayBuilder extends Module {
     private void handleClearInventory() {
         if (isRestocking || isPostRestocking)
             return;
-        assert mc.player != null;
+        assert mc.player != null && mc.world != null;
         if (stealingDelay == 0) {
             if (!mc.world.getBlockState(getBlockPos()).isAir() 
             && !(mc.world.getBlockState(getBlockPos()).getBlock() instanceof ShulkerBoxBlock)
@@ -538,7 +535,7 @@ public class IceHighwayBuilder extends Module {
             if (areShulkerBoxesNearby()) {
                 for (Item item : items) {
                     if (!isGatheringItems()) {
-                        if (BlueIceMiner.state == "waitingForPostRestock") {
+                        if (BlueIceMiner.state.equals("waitingForPostRestock")) {
                             BlueIceMiner.state = "waitingForGather";
                             BlueIceMiner.scanningWorld = true;
                         }
@@ -560,7 +557,7 @@ public class IceHighwayBuilder extends Module {
                 isPostRestocking = false;
                 isProcessingTasks = false;
                 hasQueued = false;
-                if (BlueIceMiner.state == "waitingForPostRestock") {
+                if (BlueIceMiner.state.equals("waitingForPostRestock")) {
                     BlueIceMiner.state = "idle";
                     BlueIceMiner.scanningWorld = true;
                 }
@@ -626,7 +623,7 @@ public class IceHighwayBuilder extends Module {
             ItemStack BlueIceShulker = findBestBlueIceShulker();
 
             if (BlueIceShulker == null && !isPlacingShulker) {
-                if (BlueIceMiner.state == "idle") {
+                if (BlueIceMiner.state.equals("idle")) {
                     releaseForward();
                     BlueIceMiner.state = "goToPortal";
                     BlueIceMiner.scanningWorld = true;
@@ -826,7 +823,26 @@ public class IceHighwayBuilder extends Module {
         }
         int airBlocks = 0;
         BlockPos block1 = null;
+        int startBlock = getStartBlock(direction);
+        for (int i = 1; i <= 3; i++) {
+            switch (direction) {
+                case WEST -> block1 = new BlockPos(startBlock + i * 2, playerY+1, playerZ - 1);
+                case EAST -> block1 = new BlockPos(startBlock - i * 2, playerY+1, playerZ - 1);
+                case NORTH -> block1 = new BlockPos(playerX + 1, playerY+1, startBlock + i * 2);
+                case SOUTH -> block1 = new BlockPos(playerX + 1, playerY+1, startBlock - i * 2);
+
+            }
+            assert mc.world != null;
+            if (Blocks.BLUE_ICE != mc.world.getBlockState(block1).getBlock()) {
+                airBlocks++;
+            }
+        }
+        return airBlocks > 0 && airBlocks < 3;
+    }
+
+    private int getStartBlock(Direction direction) {
         int startBlock = 0;
+        assert mc.player != null;
         switch (direction) {
             case NORTH -> {
                 if (Math.abs(mc.player.getBlockZ()) % 2 == 0) {
@@ -857,32 +873,13 @@ public class IceHighwayBuilder extends Module {
                 }
             }
         }
-        for (int i = 1; i <= 3; i++) {
-            switch (direction) {
-                case WEST -> {
-                    block1 = new BlockPos(startBlock + i * 2, playerY+1, playerZ - 1);
-                }
-                case EAST -> {
-                    block1 = new BlockPos(startBlock - i * 2, playerY+1, playerZ - 1);
-                }
-                case NORTH -> {
-                    block1 = new BlockPos(playerX + 1, playerY+1, startBlock + i * 2);
-                }
-                case SOUTH -> {
-                    block1 = new BlockPos(playerX + 1, playerY+1, startBlock - i * 2);
-                }
-            }
-            assert mc.world != null;
-            if (Blocks.BLUE_ICE != mc.world.getBlockState(block1).getBlock()) {
-                airBlocks++;
-            }
-        }
-        return airBlocks > 0 && airBlocks < 3;
+        return startBlock;
     }
 
     private void handleInvalidPosition(int Type) {
         assert mc.player != null;
         BlockPos target;
+
         target = getHighwayCoords();
 
         if (getHighwayCoords() == null) {
@@ -909,11 +906,17 @@ public class IceHighwayBuilder extends Module {
         Direction direction = getPlayerDirection();
 
         switch (direction) {
-            case Direction.NORTH, Direction.EAST:
+            case Direction.NORTH:
+                mc.player.setYaw(135);
+                break;
+            case Direction.EAST:
                 mc.player.setYaw(-135);
                 break;
-            case Direction.SOUTH, Direction.WEST:
-                mc.player.setYaw(135);
+            case Direction.WEST:
+                mc.player.setYaw(45);
+                break;
+            case Direction.SOUTH:
+                mc.player.setYaw(-45);
                 break;
         }
     }
@@ -952,7 +955,7 @@ public class IceHighwayBuilder extends Module {
         }
 
         Module iceRailAutoEat = Modules.get().get("ice-rail-auto-eat");
-        if (disableAutoEatAfterDigging.get() && iceRailAutoEat != null && iceRailAutoEat.isActive())
+        if (disableAutoEatAfterDigging.get() && iceRailAutoEat.isActive())
             iceRailAutoEat.toggle();
     }
     public Setting<List<Item>> getBlacklist(){
