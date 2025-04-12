@@ -7,7 +7,10 @@ import meteordevelopment.meteorclient.settings.EnumSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
+<<<<<<< HEAD
 import meteordevelopment.meteorclient.systems.modules.Modules;
+=======
+>>>>>>> 0031c6cc50dcebf981208c830990a7597ec34c23
 import meteordevelopment.meteorclient.utils.player.FindItemResult;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.meteorclient.utils.world.BlockUtils;
@@ -50,7 +53,11 @@ public class ScaffoldGrim extends Module {
 
         // Only place a block every 3 ticks to avoid rubberband
         if (tickCounter % 4 != 0) return;
+<<<<<<< HEAD
         if (!isActive) return;
+=======
+        if (!isActive()) return;
+>>>>>>> 0031c6cc50dcebf981208c830990a7597ec34c23
         if (getPlayerDirection() == null) {
             playerDirection = mc.player.getHorizontalFacing();
         } else
