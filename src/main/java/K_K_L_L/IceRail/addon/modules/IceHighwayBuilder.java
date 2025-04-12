@@ -20,6 +20,7 @@ import meteordevelopment.meteorclient.utils.player.Rotations;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.meteorclient.utils.world.BlockUtils;
 import meteordevelopment.orbit.EventHandler;
+import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.ShulkerBoxBlock;
 import net.minecraft.client.MinecraftClient;
@@ -537,22 +538,14 @@ public class IceHighwayBuilder extends Module {
         } else {
             ScreenHandler handler = mc.player.currentScreenHandler;
             if (stackRecentlyStolen) {
-<<<<<<< HEAD
                 if (stealingDelay < 5) {
-=======
-                if (stealingDelay < 5) { // To add a 5 tick delay
->>>>>>> 0031c6cc50dcebf981208c830990a7597ec34c23
                     stealingDelay++;
                     return;
                 }
                 stackRecentlyStolen = false;
             }
             if (restockingType == 1) {
-<<<<<<< HEAD
                 InvUtils.quickSwap().fromId(t_slot).toId(slotNumber);
-=======
-                InvUtils.quickSwap().fromId(0).toId(slotNumber);
->>>>>>> 0031c6cc50dcebf981208c830990a7597ec34c23
                 stacksStolen++;
             }
             else {

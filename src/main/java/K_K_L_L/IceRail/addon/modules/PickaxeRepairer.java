@@ -1,118 +1,87 @@
-
 package K_K_L_L.IceRail.addon.modules;
+import static K_K_L_L.IceRail.addon.Utils.*;
+import static K_K_L_L.IceRail.addon.Utils.setKeyPressed;
+import static K_K_L_L.IceRail.addon.modules.IceHighwayBuilder.*;
+import static K_K_L_L.IceRail.addon.modules.IceRailAutoEat.getIsEating;
 
+
+import K_K_L_L.IceRail.addon.IceRail;
+
+
+import baritone.api.BaritoneAPI;
+import baritone.api.pathing.goals.GoalBlock;
 import meteordevelopment.meteorclient.events.world.TickEvent;
-import meteordevelopment.meteorclient.settings.BlockListSetting;
-import meteordevelopment.meteorclient.settings.EnumSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
+import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
-import meteordevelopment.meteorclient.utils.player.FindItemResult;
+import meteordevelopment.meteorclient.utils.Utils;
+import meteordevelopment.meteorclient.utils.network.MeteorExecutor;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
+import meteordevelopment.meteorclient.utils.player.PlayerUtils;
+import meteordevelopment.meteorclient.utils.player.SlotUtils;
 import meteordevelopment.meteorclient.utils.world.BlockUtils;
+import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
-import net.minecraft.item.BlockItem;
+import net.minecraft.block.ShulkerBoxBlock;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.entity.EquipmentSlot;
+import net.minecraft.inventory.Inventory;
 import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
+import net.minecraft.network.packet.c2s.play.PlayerInteractBlockC2SPacket;
+import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.screen.ScreenHandler;
 import net.minecraft.util.Hand;
+import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
-import K_K_L_L.IceRail.addon.IceRail;
-import meteordevelopment.orbit.EventHandler;
 import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Position;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.biome.Biome;
+import net.minecraft.world.biome.BiomeKeys;
+import org.jetbrains.annotations.NotNull;
+import java.util.*;
+import net.minecraft.item.*;
+import net.minecraft.enchantment.Enchantments;
+import net.minecraft.world.dimension.DimensionType;
+import net.minecraft.block.entity.ShulkerBoxBlockEntity;
 
-import java.util.List;
-
-import static K_K_L_L.IceRail.addon.Utils.*;
-import static K_K_L_L.IceRail.addon.modules.IceHighwayBuilder.*;
-
-public class ScaffoldGrim extends Module {
-    public ScaffoldGrim() {
-        super(IceRail.CATEGORY, "scaffold-grim", "Places blocks in front of you.");
+public class PickaxeRepairer extends Module {
+    MinecraftClient mc = MinecraftClient.getInstance();
+    //Record starting coordinates
+    //Use a combination of highway elytra bounce, blue ice boating, and open nether to reach a specified nether portal coordinate
+    //Go through the nether portal, then fly towards a specified overworld coordinate (the block to stand on while grinding)
+    //Place down a pickaxe shulker and retreive all broken pickaxes
+    //Bring a non-full durability tool to offhand if the offhand is not a tool or has a full durability tool (recode automend basically)
+    //Swap to a sword
+    //Enable killaura in meteor
+    //If there is no non-full durability tool in inventory, dump into shulker and check for another shulker
+    //Also check for shulkers in echest
+    //If all tools have full durability: Fly back to the starting coordinates using same route
+    public PickaxeRepairer() {
+        super(IceRail.CATEGORY, "pickaxe-repairer", "Automatically repairs pickaxes and gear at a user-specified mob farm.");
     }
+    private final SettingGroup sgGrinderPos = settings.createGroup("Grinder Position");
+    private final Setting<Integer> grinderX = sgGrinderPos.add(new IntSetting.Builder()
+            .name("Grinder x")
+            .description("X coordinate to stand on when grinding.")
+            .defaultValue(0)
+            .build());
 
-    IceHighwayBuilder iceHighwayBuilder = Modules.get().get(IceHighwayBuilder.class);
-    Setting<ScaffoldGrim.ListMode> blocksFilter = iceHighwayBuilder.scaffoldBlocksFilter;
-    Setting<List<Block>> blocks = iceHighwayBuilder.scaffoldBlocks;
+    private final Setting<Integer> grinderY = sgGrinderPos.add(new IntSetting.Builder()
+            .name("Grinder y")
+            .description("Y coordinate to stand on when grinding.")
+            .defaultValue(64)
+            .min(-64)
+            .max(320)
+            .sliderRange(-64,320)
+            .build());
 
-    public boolean isActive = false;
-    private int tickCounter = 0;
-
-    @EventHandler
-    private void onTick(TickEvent.Pre event) {
-        assert mc.player != null && mc.world != null;
-        tickCounter++;
-        Direction playerDirection;
-        BlockPos playerPos = mc.player.getBlockPos();
-
-        // Only place a block every 3 ticks to avoid rubberband
-        if (tickCounter % 4 != 0) return;
-        if (!isActive) return;
-        if (getPlayerDirection() == null) {
-            playerDirection = mc.player.getHorizontalFacing();
-        } else
-            playerDirection = getPlayerDirection();
-
-        FindItemResult item = null;
-
-        // Find a block in the player's inventory
-        for (int i = 0; i < 9; i++) {
-            Item foundItem = mc.player.getInventory().getStack(i).getItem();
-            if (foundItem instanceof BlockItem blockItem) {
-                Block block = blockItem.getBlock();
-
-                // Check blacklist/whitelist
-                if (blocksFilter.get() == ListMode.Blacklist && blocks.get().contains(block)) continue;
-                if (blocksFilter.get() == ListMode.Whitelist && !blocks.get().contains(block)) continue;
-
-
-                item = InvUtils.findInHotbar(itemStack -> itemStack.getItem() == Items.NETHERRACK);
-                break;
-            }
-        }
-
-        if (item == null) return;
-
-        for (int offset = 1; offset <= 4; offset++) {
-            BlockPos targetPos = switch (playerDirection) {
-                case NORTH -> playerPos.add(0, -1, -offset);
-                case SOUTH -> playerPos.add(0, -1, offset);
-                case EAST -> playerPos.add(offset, -1, 0);
-                case WEST -> playerPos.add(-offset, -1, 0);
-                default -> null;
-            };
-
-            if (targetPos == null) return;
-            if (mc.getNetworkHandler() == null) return;
-            assert mc.world != null;
-            if (mc.world.getBlockState(targetPos).getBlock() == Blocks.SOUL_SAND) {
-                mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK, targetPos, BlockUtils.getDirection(targetPos)));
-                mc.player.swingHand(Hand.MAIN_HAND);
-                mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK, targetPos, BlockUtils.getDirection(targetPos)));
-            }
-            if (mc.world.getBlockState(targetPos).isAir()) {
-                //InvUtils.swap(InvUtils.findInHotbar(itemStack -> itemStack.getItem() == Items.NETHERRACK).slot(), false);
-                airPlace(Items.NETHERRACK, targetPos, Direction.DOWN);
-            }
-        }
-    }
-
-    public enum ListMode {
-        Whitelist,
-        Blacklist
-    }
-
-    public boolean isActive() {
-        return isActive;
-    }
-    public void toggle() {
-        if (isActive) {
-            isActive = false;
-        } else {
-            isActive = true;
-        }
-    }
+    private final Setting<Integer> grinderZ = sgGrinderPos.add(new IntSetting.Builder()
+            .name("Grinder z")
+            .description("Z coordinate to stand on when grinding.")
+            .defaultValue(0)
+            .build());
 }
