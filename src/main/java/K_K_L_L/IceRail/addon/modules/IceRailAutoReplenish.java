@@ -19,6 +19,7 @@
  import meteordevelopment.orbit.EventHandler;
  import net.minecraft.block.ShulkerBoxBlock;
  import net.minecraft.client.MinecraftClient;
+ import net.minecraft.component.DataComponentTypes;
  import net.minecraft.inventory.Inventory;
  import net.minecraft.item.*;
  
@@ -45,36 +46,52 @@
              .build()
      );
  
-     private final Setting<Item> slot3Item = sgGeneral.add(new ItemSetting.Builder()
-             .name("slot-3-item")
-             .description("Item to maintain in the third hotbar slot.")
-             .defaultValue(Items.BLUE_ICE)
-             .build()
+     //Tool, scaffold block, food, placing slot, trash slot, shulker slot
+     public final Setting<Integer> toolSlot = sgGeneral.add(new IntSetting.Builder()
+             .name("tool-slot")
+             .description("Flint and steel, pickaxes, and fireworks are swapped to this slot. Slot number must be unique.")
+             .defaultValue(0)
+             .min(0).max(8).build()
      );
- 
-     private final Setting<Item> slot4Item = sgGeneral.add(new ItemSetting.Builder()
-             .name("slot-4-item")
-             .description("Item to maintain in the fourth hotbar slot.")
-             .defaultValue(Items.AIR)
-             .build()
+     public final Setting<Integer> scaffoldSlot = sgGeneral.add(new IntSetting.Builder()
+             .name("scaffold-slot")
+             .description("Valid scaffold blocks are swapped to this slot. Slot number must be unique.")
+             .defaultValue(8)
+             .min(0).max(8).build()
      );
- 
-     private final Setting<Item> slot5Item = sgGeneral.add(new ItemSetting.Builder()
-             .name("slot-5-item")
-             .description("Item to maintain in the fifth hotbar slot.")
-             .defaultValue(Items.AIR)
-             .build()
+     public final Setting<Integer> foodSlot = sgGeneral.add(new IntSetting.Builder()
+             .name("food-slot")
+             .description("Foods are swapped to this slot. Slot number must be unique.")
+             .defaultValue(2)
+             .min(0).max(8).build()
      );
- 
-     private final Setting<Item> slot6Item = sgGeneral.add(new ItemSetting.Builder()
-             .name("slot-6-item")
-             .description("Item to maintain in the sixth hotbar slot.")
-             .defaultValue(Items.AIR)
-             .build()
+     public final Setting<Integer> placingSlot = sgGeneral.add(new IntSetting.Builder()
+             .name("placing-slot")
+             .description("Blue ice, echests, and obsidian are swapped to this slot. Slot number must be unique.")
+             .defaultValue(1)
+             .min(0).max(8).build()
+     );
+     public final Setting<Integer> trashSlot = sgGeneral.add(new IntSetting.Builder()
+             .name("trash-slot")
+             .description("Items are thrown from this slot while clearing inventory. Slot number must be unique.")
+             .defaultValue(3)
+             .min(0).max(8).build()
+     );
+     public final Setting<Integer> shulkerSlot = sgGeneral.add(new IntSetting.Builder()
+             .name("shulker-slot")
+             .description("Shulkers are swapped to this slot during shulker restocking. Slot number must be unique.")
+             .defaultValue(4)
+             .min(0).max(8).build()
      );
  
      private final ItemStack[] items = new ItemStack[10];
      private int tickDelayLeft;
+     public boolean isActive;
+     public String toolSlotItem = "pickaxe"; //When pickaxe: Find and swap the best pickaxe using the existing method. Otherwise: skip
+     //ScaffoldSlotItem is determined through an inventory scan with IceHighwayBuilder.scaffoldBlacklist
+     public String foodSlotItem = "food"; // any type of food not in the blacklist
+     public Item placingSlotItem = Items.BLUE_ICE;
+     public String shulkerSlotItem = "blue ice";
  
      public IceRailAutoReplenish() {
          super(IceRail.CATEGORY, "ice-rail-auto-replenish",
@@ -90,30 +107,15 @@
  
      @EventHandler
      private void onTick(TickEvent.Pre event) {
-         if (!isActive()) return;
+         if (!isActive) return;
          boolean flag = false;
          if (tickDelayLeft <= 0) {
              tickDelayLeft = tickDelay.get();
  
-             findAndMoveBestToolToFirstHotbarSlot();
-             checkBlueIceShulkerSlot();
-             checkPicksShulkerSlot();
-
-             Item[] itemsToCheck = new Item[]{
-                     slot3Item.get(),
-                     slot4Item.get(), slot5Item.get(),
-                     slot6Item.get()
-             };
-             
-             for (int i = 1; i <= 5; i++) {
-                 int j = i-2; if (j<0) {j=0;}
-                 if (!itemsToCheck[j].equals(Items.AIR) && !flag) flag = true;
-                 if (i == 1) {
-                    checkSlotWithDesignatedItem(1, Items.NETHERRACK);
-                 } else {
-                    checkSlotWithDesignatedItem(i, itemsToCheck[i - 2]);
-                 }
-             }
+             handleToolSlot();
+             handleShulkerSlot();
+             handlePlacingSlot();
+             handleFoodSlot();
          }
          else {
              tickDelayLeft--;
@@ -127,23 +129,31 @@
              toggle();
          }
      }
- 
-     private void findAndMoveBestToolToFirstHotbarSlot() {
+     public boolean isActive() {
+         return isActive;
+     }
+     public void toggle() {
+         if (isActive) {
+             isActive = false;
+         } else {
+             isActive = true;
+         }
+     }
+     private void handleToolSlot() {
          MinecraftClient mc = MinecraftClient.getInstance();
          Inventory inventory = mc.player.getInventory();
+         if (toolSlotItem != "pickaxe") return;
+         ItemStack toolStack = inventory.getStack(toolSlot.get());
  
-         int firstHotbarSlot = 0;
-         ItemStack firstHotbarStack = inventory.getStack(firstHotbarSlot);
- 
-         if (firstHotbarStack.getItem() instanceof PickaxeItem
-                 && firstHotbarStack.getMaxDamage() - firstHotbarStack.getDamage() > 50) {
+         if (toolStack.getItem() instanceof PickaxeItem
+                 && toolStack.getMaxDamage() - toolStack.getDamage() > 50) {
              return; // The first slot already has a valid pickaxe
          }
  
          int bestSlot = -1;
  
          for (int i = 0; i < inventory.size(); i++) {
-             if (i == firstHotbarSlot) continue; // Skip the first slot
+             if (i == toolSlot.get()) continue; // Skip the first slot
  
              ItemStack stack = inventory.getStack(i);
              if (stack.getItem() instanceof PickaxeItem
@@ -154,48 +164,47 @@
          }
  
          if (bestSlot != -1) {
-             InvUtils.move().from(bestSlot).toHotbar(firstHotbarSlot);
+             InvUtils.move().from(bestSlot).toHotbar(toolSlot.get());
          }
      }
  
-     private void checkBlueIceShulkerSlot() {
+     private void handleShulkerSlot() {
          assert mc.player != null;
- 
-         ItemStack currentStack = mc.player.getInventory().getStack(8); // 9th slot (0-indexed)
- 
+         ItemStack currentStack = mc.player.getInventory().getStack(shulkerSlot.get());
          if (!(currentStack.getItem() instanceof BlockItem &&
                  ((BlockItem) currentStack.getItem()).getBlock() instanceof ShulkerBoxBlock) ||
                  !hasBlueiceInShulker(currentStack)) {
- 
-             ItemStack shulkerWithBlueIce = findBestBlueIceShulker();
- 
-             if (shulkerWithBlueIce != null) {
-                 int sourceSlot = findItemStackSlot(shulkerWithBlueIce);
+             ItemStack shulkerFound;
+             if (shulkerSlotItem == "blue ice") {
+                 shulkerFound = findBestBlueIceShulker();
+             } else if (shulkerSlotItem == "pickaxes") {
+                 shulkerFound = findBestPicksShulker();
+             } else if (shulkerSlotItem == "food") {
+                 shulkerFound = findFoodShulker();
+             } else {
+                 shulkerFound = null; //convert string to Item
+             }
+             if (shulkerFound != null) {
+                 int sourceSlot = findItemStackSlot(shulkerFound);
                  if (sourceSlot != -1) {
-                     InvUtils.move().from(sourceSlot).to(8); // 9th slot (0-indexed)
+                     InvUtils.move().from(sourceSlot).to(shulkerSlot.get());
                  }
              }
          }
      }
  
-     private void checkPicksShulkerSlot() {
-         assert mc.player != null;
- 
-         ItemStack currentStack = mc.player.getInventory().getStack(7); // 8th slot (0-indexed)
- 
-         if (!(currentStack.getItem() instanceof BlockItem &&
-                 ((BlockItem) currentStack.getItem()).getBlock() instanceof ShulkerBoxBlock) ||
-                 !hasPicksInShulker(currentStack)) {
- 
-             ItemStack shulkerWithPicks = findBestPicksShulker();
- 
-             if (shulkerWithPicks != null) {
-                 int sourceSlot = findItemStackSlot(shulkerWithPicks);
-                 if (sourceSlot != -1) {
-                     InvUtils.move().from(sourceSlot).to(7); // 8th slot (0-indexed)
-                 }
+     private static boolean hasFoodInShulker(ItemStack shulkerBox) {
+         ItemStack[] containerItems = new ItemStack[27];
+         Utils.getItemsInContainerItem(shulkerBox, containerItems);
+         IceRailAutoEat iceRailAutoEat = Modules.get().get(IceRailAutoEat.class);
+         for (ItemStack stack : containerItems) {
+             if (!stack.isEmpty() &&
+                     stack.getItem().getComponents().get(DataComponentTypes.FOOD) != null &&
+                     !iceRailAutoEat.blacklist.get().contains(stack.getItem())) {
+                 return true;
              }
          }
+         return false;
      }
  
      private static boolean hasBlueiceInShulker(ItemStack shulkerBox) {
@@ -223,22 +232,22 @@
          }
          return false;
      }
-
+ 
      public static int findPickToSwap(ItemStack shulkerBox) {
-        ItemStack[] containerItems = new ItemStack[27];
-        Utils.getItemsInContainerItem(shulkerBox, containerItems);
-        int i;
-        i = 0;
-        for (ItemStack stack : containerItems) {
-            if (!stack.isEmpty() && (stack.getItem() == Items.DIAMOND_PICKAXE || stack.getItem() == Items.NETHERITE_PICKAXE)) {
-                if (stack.getDamage() < stack.getMaxDamage() - 50) {
-                    return i;
-                }
-            }
-            i++;
-        }
-        return -1;
-    }
+         ItemStack[] containerItems = new ItemStack[27];
+         Utils.getItemsInContainerItem(shulkerBox, containerItems);
+         int i;
+         i = 0;
+         for (ItemStack stack : containerItems) {
+             if (!stack.isEmpty() && (stack.getItem() == Items.DIAMOND_PICKAXE || stack.getItem() == Items.NETHERITE_PICKAXE)) {
+                 if (stack.getDamage() < stack.getMaxDamage() - 50) {
+                     return i;
+                 }
+             }
+             i++;
+         }
+         return -1;
+     }
  
      public static ItemStack findBestBlueIceShulker() {
          for (int i = 0; i < Objects.requireNonNull(mc.player).getInventory().size(); i++) {
@@ -248,6 +257,21 @@
                      ((BlockItem) stack.getItem()).getBlock() instanceof ShulkerBoxBlock) {
  
                  if (hasBlueiceInShulker(stack)) {
+                     return stack;
+                 }
+             }
+         }
+         return null;
+     }
+ 
+     public static ItemStack findFoodShulker() {
+         for (int i = 0; i < Objects.requireNonNull(mc.player).getInventory().size(); i++) {
+             ItemStack stack = mc.player.getInventory().getStack(i);
+ 
+             if (stack.getItem() instanceof BlockItem &&
+                     ((BlockItem) stack.getItem()).getBlock() instanceof ShulkerBoxBlock) {
+ 
+                 if (hasFoodInShulker(stack)) {
                      return stack;
                  }
              }
@@ -279,8 +303,46 @@
          return -1;
      }
  
-     private void checkSlotWithDesignatedItem(int slot, Item desiredItem) {
+     private void handlePlacingSlot() {
          assert mc.player != null;
+         int slot = placingSlot.get();
+         Item desiredItem = placingSlotItem;
+         ItemStack currentStack = mc.player.getInventory().getStack(slot);
+ 
+         if (desiredItem == Items.AIR) return;
+ 
+         if (currentStack.isEmpty() || currentStack.getItem() != desiredItem) {
+             int foundSlot = findSpecificItem(desiredItem, slot, threshold.get());
+             if (foundSlot != -1) {
+                 addSlots(slot, foundSlot);
+             }
+         }
+         else if (currentStack.isStackable() && currentStack.getCount() <= threshold.get()) {
+             int foundSlot = findSpecificItem(desiredItem, slot, threshold.get() - currentStack.getCount() + 1);
+             if (foundSlot != -1) {
+                 addSlots(slot, foundSlot);
+             }
+         }
+     }
+ 
+     private void handleFoodSlot() {
+         assert mc.player != null;
+         int slot = foodSlot.get();
+         Item desiredItem;
+         if (foodSlotItem == "gapple") {
+             desiredItem = Items.ENCHANTED_GOLDEN_APPLE;
+         } else {
+             desiredItem = Items.ENCHANTED_GOLDEN_APPLE;
+             for (int i = 0; i < Objects.requireNonNull(mc.player).getInventory().size(); i++) {
+                 ItemStack stack = mc.player.getInventory().getStack(i);
+                 if (stack.getItem().getComponents().get(DataComponentTypes.FOOD) != null &&
+                         !Modules.get().get(IceRailAutoEat.class).blacklist.get().contains(stack.getItem())
+                 ) {
+                     desiredItem = stack.getItem();
+                     break;
+                 }
+             }
+         }
          ItemStack currentStack = mc.player.getInventory().getStack(slot);
  
          if (desiredItem == Items.AIR) return;

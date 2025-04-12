@@ -8,6 +8,7 @@ import K_K_L_L.IceRail.addon.IceRail;
 import baritone.api.BaritoneAPI;
 import baritone.api.pathing.goals.GoalBlock;
 import meteordevelopment.meteorclient.events.world.TickEvent;
+import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
@@ -16,8 +17,8 @@ import meteordevelopment.meteorclient.utils.network.MeteorExecutor;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.meteorclient.utils.player.PlayerUtils;
 import meteordevelopment.meteorclient.utils.player.Rotations;
+import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.meteorclient.utils.world.BlockUtils;
-import meteordevelopment.meteorclient.utils.player.SlotUtils;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
@@ -33,6 +34,7 @@ import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
 import org.jetbrains.annotations.NotNull;
 import java.util.*;
 
@@ -51,8 +53,6 @@ public class IceHighwayBuilder extends Module {
     public static boolean wasEchestFarmerActive = false;
     public static boolean baritoneCalled;
     public static Direction playerDirection;
-    private float playerYaw;
-    private float playerPitch;
     public static boolean isRestocking;
     public static Integer restockingType;
     public static boolean isWallDone;
@@ -63,6 +63,7 @@ public class IceHighwayBuilder extends Module {
     public static boolean hasOpenedShulker;
     public static Integer slot_number;
     public static boolean wasRestocking;
+    public static boolean stackRecentlyStolen;
     public static BlockPos shulkerBlockPos;
     public static boolean isBreakingShulker;
     public static boolean isPostRestocking;
@@ -80,6 +81,9 @@ public class IceHighwayBuilder extends Module {
     }
 
     public static Direction getPlayerDirection() {
+        if (playerDirection == null) {
+            return Direction.SOUTH;
+        }
         return playerDirection;
     }
 
@@ -88,18 +92,33 @@ public class IceHighwayBuilder extends Module {
     public static Integer playerY;
     public static Integer playerZ;
 
+    private final SettingGroup sgEnable = settings.createGroup("Enable functions");
     private final SettingGroup sgAutoEat = settings.createGroup("Auto Eat");
-    private final SettingGroup sgInventory = settings.createGroup("Inventory");
-    private final SettingGroup sgBlacklist = settings.createGroup("Inventory clearer");
+    private final SettingGroup sgInventory = settings.createGroup("Inventory Management");
+    private final SettingGroup sgIceRailNuker = settings.createGroup("Ice Rail Nuker");
+    private final SettingGroup sgScaffoldGrim = settings.createGroup("Scaffold Grim");
 
-    // Auto Eat Settings
-    private final Setting<Boolean> enableAutoEat = sgAutoEat.add(new BoolSetting.Builder()
+    //Module Enabling settings
+    private final Setting<Boolean> enableBlueIceMiner = sgEnable.add(new BoolSetting.Builder()
+            .name("enable-blue-ice-miner")
+            .description("Automatically enables Blue Ice Miner when out of blue ice.")
+            .defaultValue(true)
+            .build()
+    );
+    private final Setting<Boolean> enablePickaxeRepairer = sgEnable.add(new BoolSetting.Builder()
+            .name("enable-pickaxe-repairer")
+            .description("Automatically enables Pickaxe Repairer when out of pickaxes.")
+            .defaultValue(true)
+            .build()
+    );
+    private final Setting<Boolean> enableAutoEat = sgEnable.add(new BoolSetting.Builder()
             .name("enable-auto-eat")
             .description("Pauses the current task and automatically eats.")
             .defaultValue(true)
             .build()
     );
-
+    // Auto Eat Settings
+    //<editor-fold desc="eatEGaps">
     private final Setting<Boolean> eatEGaps = sgAutoEat.add(new BoolSetting.Builder()
             .name("eat-egap-when-burning")
             .description("Eats an enchanted golden apple if the player is burning.")
@@ -107,7 +126,8 @@ public class IceHighwayBuilder extends Module {
             .visible(enableAutoEat::get)
             .build()
     );
-
+    //</editor-fold>
+    //<editor-fold desc="disableAutoEatAfterDigging">
     private final Setting<Boolean> disableAutoEatAfterDigging = sgAutoEat.add(new BoolSetting.Builder()
             .name("disable-auto-eat-after-digging")
             .description("Disables Auto Eat when \"Ice Highway Builder\" is disabled.")
@@ -115,81 +135,205 @@ public class IceHighwayBuilder extends Module {
             .visible(enableAutoEat::get)
             .build()
     );
+    //</editor-fold>
 
-    // Inventory Management Settings
-    private final Setting<Boolean> autoRefillHotbar = sgInventory.add(new BoolSetting.Builder()
-            .name("auto-replenish")
-            .description("Automatically move items from inventory to hotbar when slots are empty.")
-            .defaultValue(true)
-            .build()
-    );
-
+    //Inventory Management Settings
+    //<editor-fold desc="openAndCloseInventory">
     private final Setting<Boolean> openAndCloseInventory = sgInventory.add(new BoolSetting.Builder()
             .name("open-and-close-inventory")
             .description("Whether to open and close inventory on activated or not. Enable this if \"Ice Rail Auto Replenish\" doesn't work sometimes.")
             .defaultValue(true)
             .build()
     );
+    //</editor-fold>
+    //<editor-fold desc="throwBlacklist">
+    private final Setting<List<Item>> throwBlacklist = sgInventory.add(new ItemListSetting.Builder()
+            .name("throw-blacklist")
+            .description("Items you don't want to throw.")
+            .defaultValue(
+                    Items.SHULKER_BOX,
+                    Items.WHITE_SHULKER_BOX,
+                    Items.ORANGE_SHULKER_BOX,
+                    Items.MAGENTA_SHULKER_BOX,
+                    Items.LIGHT_BLUE_SHULKER_BOX,
+                    Items.YELLOW_SHULKER_BOX,
+                    Items.LIME_SHULKER_BOX,
+                    Items.PINK_SHULKER_BOX,
+                    Items.GRAY_SHULKER_BOX,
+                    Items.LIGHT_GRAY_SHULKER_BOX,
+                    Items.CYAN_SHULKER_BOX,
+                    Items.PURPLE_SHULKER_BOX,
+                    Items.BLUE_SHULKER_BOX,
+                    Items.BROWN_SHULKER_BOX,
+                    Items.GREEN_SHULKER_BOX,
+                    Items.RED_SHULKER_BOX,
+                    Items.BLACK_SHULKER_BOX,
+                    Items.ENCHANTED_GOLDEN_APPLE,
+                    Items.COOKED_BEEF,
+                    Items.COOKED_CHICKEN,
+                    Items.COOKED_MUTTON,
+                    Items.COOKED_COD,
+                    Items.COOKED_PORKCHOP,
+                    Items.ENDER_CHEST,
+                    Items.GOLDEN_CARROT,
+                    Items.GOLDEN_BOOTS,
+                    Items.GOLDEN_HELMET,
+                    Items.OBSIDIAN,
+                    Items.BLUE_ICE,
+                    Items.FLINT_AND_STEEL,
+                    Items.DIAMOND_PICKAXE,
+                    Items.NETHERITE_PICKAXE,
+                    Items.DIAMOND_AXE,
+                    Items.NETHERITE_AXE,
+                    Items.DIAMOND_SHOVEL,
+                    Items.NETHERITE_SHOVEL,
+                    Items.DIAMOND_SWORD,
+                    Items.NETHERITE_SWORD,
+                    Items.DIAMOND_HELMET,
+                    Items.DIAMOND_CHESTPLATE,
+                    Items.DIAMOND_LEGGINGS,
+                    Items.DIAMOND_BOOTS,
+                    Items.NETHERITE_HELMET,
+                    Items.NETHERITE_CHESTPLATE,
+                    Items.NETHERITE_LEGGINGS,
+                    Items.NETHERITE_BOOTS,
+                    Items.END_CRYSTAL,
+                    Items.TOTEM_OF_UNDYING,
+                    Items.EXPERIENCE_BOTTLE,
+                    Items.CRAFTING_TABLE,
+                    Items.FIREWORK_ROCKET,
+                    Items.ELYTRA
+            )
+            .build()
+    );
+    //</editor-fold>
+    //Nuker settings
+    //<editor-fold desc="Nuker settings">
+    public final Setting<Integer> nukerDelay = sgIceRailNuker.add(new IntSetting.Builder()
+            .name("delay")
+            .description("Delay in ticks between breaking blocks.")
+            .defaultValue(0)
+            .build()
+    );
 
-    private final Setting<List<Item>> blacklist = sgBlacklist.add(new ItemListSetting.Builder()
-         .name("blacklist")
-         .description("Items you don't want to throw.")
-         .defaultValue(
-                 Items.SHULKER_BOX,
-                 Items.WHITE_SHULKER_BOX,
-                 Items.ORANGE_SHULKER_BOX,
-                 Items.MAGENTA_SHULKER_BOX,
-                 Items.LIGHT_BLUE_SHULKER_BOX,
-                 Items.YELLOW_SHULKER_BOX,
-                 Items.LIME_SHULKER_BOX,
-                 Items.PINK_SHULKER_BOX,
-                 Items.GRAY_SHULKER_BOX,
-                 Items.LIGHT_GRAY_SHULKER_BOX,
-                 Items.CYAN_SHULKER_BOX,
-                 Items.PURPLE_SHULKER_BOX,
-                 Items.BLUE_SHULKER_BOX,
-                 Items.BROWN_SHULKER_BOX,
-                 Items.GREEN_SHULKER_BOX,
-                 Items.RED_SHULKER_BOX,
-                 Items.BLACK_SHULKER_BOX,
-                 Items.ENCHANTED_GOLDEN_APPLE,
-                 Items.COOKED_BEEF,
-                 Items.COOKED_CHICKEN,
-                 Items.COOKED_MUTTON,
-                 Items.COOKED_COD,
-                 Items.COOKED_PORKCHOP,
-                 Items.ENDER_CHEST,
-                 Items.GOLDEN_CARROT,
-                 Items.GOLDEN_BOOTS,
-                 Items.GOLDEN_HELMET,
-                 Items.OBSIDIAN,
-                 Items.BLUE_ICE,
-                 Items.FLINT_AND_STEEL,
-                 Items.DIAMOND_PICKAXE,
-                 Items.NETHERITE_PICKAXE,
-                 Items.DIAMOND_AXE,
-                 Items.NETHERITE_AXE,
-                 Items.DIAMOND_SHOVEL,
-                 Items.NETHERITE_SHOVEL,
-                 Items.DIAMOND_SWORD,
-                 Items.NETHERITE_SWORD,
-                 Items.DIAMOND_HELMET,
-                 Items.DIAMOND_CHESTPLATE,
-                 Items.DIAMOND_LEGGINGS,
-                 Items.DIAMOND_BOOTS,
-                 Items.NETHERITE_HELMET,
-                 Items.NETHERITE_CHESTPLATE,
-                 Items.NETHERITE_LEGGINGS,
-                 Items.NETHERITE_BOOTS,
-                 Items.END_CRYSTAL,
-                 Items.TOTEM_OF_UNDYING,
-                 Items.EXPERIENCE_BOTTLE,
-                 Items.CRAFTING_TABLE,
-                 Items.FIREWORK_ROCKET,
-                 Items.ELYTRA
-         )
-         .build()
-     );
+    public final Setting<Integer> nukerMaxBlocksPerTick = sgIceRailNuker.add(new IntSetting.Builder()
+            .name("max-blocks-per-tick")
+            .description("Maximum blocks to try to break per tick. Useful when insta mining.")
+            .defaultValue(3)
+            .min(1)
+            .sliderRange(1, 6)
+            .build()
+    );
+
+    public final Setting<Boolean> nukerSwingHand = sgIceRailNuker.add(new BoolSetting.Builder()
+            .name("swing-hand")
+            .description("Swing hand client side.")
+            .defaultValue(true)
+            .build()
+    );
+
+    public final Setting<Boolean> nukerPacketMine = sgIceRailNuker.add(new BoolSetting.Builder()
+            .name("packet-mine")
+            .description("Attempt to instamine everything at once.")
+            .defaultValue(true)
+            .build()
+    );
+
+    public final Setting<Boolean> nukerRotate = sgIceRailNuker.add(new BoolSetting.Builder()
+            .name("rotate")
+            .description("Rotates server-side to the block being mined.")
+            .defaultValue(false)
+            .build()
+    );
+
+    public final Setting<IceRailNuker.ListMode> nukerListMode = sgIceRailNuker.add(new EnumSetting.Builder<IceRailNuker.ListMode>()
+            .name("list-mode")
+            .description("Selection mode.")
+            .defaultValue(IceRailNuker.ListMode.Blacklist)
+            .build()
+    );
+
+    public final Setting<List<Block>> nukerBlacklist = sgIceRailNuker.add(new BlockListSetting.Builder()
+            .name("blacklist")
+            .description("The blocks you don't want to mine.")
+            .defaultValue(Blocks.BLUE_ICE)
+            .visible(() -> nukerListMode.get() == IceRailNuker.ListMode.Blacklist)
+            .build()
+    );
+
+    public final Setting<List<Block>> nukerWhitelist = sgIceRailNuker.add(new BlockListSetting.Builder()
+            .name("whitelist")
+            .description("The blocks you want to mine.")
+            .visible(() -> nukerListMode.get() == IceRailNuker.ListMode.Whitelist)
+            .build()
+    );
+
+    public final Setting<Boolean> nukerEnableRenderBreaking = sgIceRailNuker.add(new BoolSetting.Builder()
+            .name("broken-blocks")
+            .description("Enable rendering broken blocks.")
+            .defaultValue(true)
+            .build()
+    );
+
+    public final Setting<ShapeMode> shapeModeBreak = sgIceRailNuker.add(new EnumSetting.Builder<ShapeMode>()
+            .name("nuke-block-mode")
+            .description("How the shapes for broken blocks are rendered.")
+            .defaultValue(ShapeMode.Both)
+            .visible(nukerEnableRenderBreaking::get)
+            .build()
+    );
+
+    public final Setting<SettingColor> sideColor = sgIceRailNuker.add(new ColorSetting.Builder()
+            .name("side-color")
+            .description("The side color of the target block rendering.")
+            .defaultValue(new SettingColor(255, 0, 0, 80))
+            .visible(nukerEnableRenderBreaking::get)
+            .build()
+    );
+
+    public final Setting<SettingColor> lineColor = sgIceRailNuker.add(new ColorSetting.Builder()
+            .name("line-color")
+            .description("The line color of the target block rendering.")
+            .defaultValue(new SettingColor(255, 0, 0, 255))
+            .visible(nukerEnableRenderBreaking::get)
+            .build()
+    );
+    //</editor-fold>
+    //ScaffoldGrim settings
+    public final Setting<ScaffoldGrim.ListMode> scaffoldBlocksFilter = sgScaffoldGrim.add(new EnumSetting.Builder<ScaffoldGrim.ListMode>()
+            .name("blocks-filter")
+            .description("How to use the block list setting")
+            .defaultValue(ScaffoldGrim.ListMode.Blacklist)
+            .build()
+    );
+    //<editor-fold desc="scaffoldBlocks">
+    public final Setting<List<Block>> scaffoldBlocks = sgScaffoldGrim.add(new BlockListSetting.Builder()
+            .name("blocks")
+            .description("Selected blocks.")
+            .defaultValue(
+                    Blocks.BLUE_ICE,
+                    Blocks.ENDER_CHEST,
+                    Blocks.SHULKER_BOX,
+                    Blocks.WHITE_SHULKER_BOX,
+                    Blocks.ORANGE_SHULKER_BOX,
+                    Blocks.MAGENTA_SHULKER_BOX,
+                    Blocks.LIGHT_BLUE_SHULKER_BOX,
+                    Blocks.YELLOW_SHULKER_BOX,
+                    Blocks.LIME_SHULKER_BOX,
+                    Blocks.PINK_SHULKER_BOX,
+                    Blocks.GRAY_SHULKER_BOX,
+                    Blocks.LIGHT_GRAY_SHULKER_BOX,
+                    Blocks.CYAN_SHULKER_BOX,
+                    Blocks.PURPLE_SHULKER_BOX,
+                    Blocks.BLUE_SHULKER_BOX,
+                    Blocks.BROWN_SHULKER_BOX,
+                    Blocks.GREEN_SHULKER_BOX,
+                    Blocks.RED_SHULKER_BOX,
+                    Blocks.BLACK_SHULKER_BOX
+            )
+            .build()
+    );
+    //</editor-fold>
 
     public Direction getPlayerCurrentDirection() {
         assert mc.player != null;
@@ -218,6 +362,11 @@ public class IceHighwayBuilder extends Module {
             toggle();
             return;
         }
+        if (mc.player.getWorld().getRegistryKey() != World.NETHER) {
+            error("Player must be in the nether. Did you mean to enable Blue Ice Miner or Pickaxe Repairer?");
+            toggle();
+            return;
+        }
         initializeRequiredVariables();
         enableRequiredModules();
 
@@ -226,15 +375,10 @@ public class IceHighwayBuilder extends Module {
 
         assert mc.player != null;
         playerDirection = getPlayerCurrentDirection();
-        playerPitch = 0;
     }
 
     private boolean validateInitialConditions() {
-        if (mc.player == null || mc.world == null) return false;
-
-        boolean flag = true;
-
-        return flag;
+        return mc.player != null && mc.world != null;
     }
 
     @Override
@@ -299,6 +443,7 @@ public class IceHighwayBuilder extends Module {
         swapSlot = -1;
         isClearingInventory = false;
         oldYaw = 0;
+        stackRecentlyStolen = false;
     }
 
     private void steal(ScreenHandler handler, int slot_number) {
@@ -309,6 +454,7 @@ public class IceHighwayBuilder extends Module {
         if (handler.getSlot(i).hasStack() && Utils.canUpdate()) {
             InvUtils.shiftClick().slotId(i);
             stacksStolen++;
+            stackRecentlyStolen = true;
         }
     }
 
@@ -337,16 +483,16 @@ public class IceHighwayBuilder extends Module {
         }
 
         shulkerBlockPos = getBlockPos();
+        IceRailAutoReplenish autoReplenish = Modules.get().get(IceRailAutoReplenish.class);
+        int s_slot = autoReplenish.shulkerSlot.get();
+        int t_slot = autoReplenish.toolSlot.get();
 
         if (hasLookedAtShulker < 10) { // To add a 10 tick delay
             if (hasLookedAtShulker == 0) {
-                if (restockingType == 0) {
-                    InvUtils.swap(8, false);
-                } else {
-                    InvUtils.swap(7, false);
-                }
+                InvUtils.swap(s_slot, false);
+                autoReplenish.shulkerSlotItem = (restockingType == 0) ? "blue ice" : "pickaxes";
                 lookAtBlock(shulkerBlockPos.withY(playerY - 1)); // To minimize the chance of the shulker being placed upside down
-            }   
+            }
 
             hasLookedAtShulker++;
             return;
@@ -354,11 +500,7 @@ public class IceHighwayBuilder extends Module {
 
         if (!(mc.world.getBlockState(shulkerBlockPos).getBlock() instanceof ShulkerBoxBlock)) {
             if (BlockUtils.canPlace(shulkerBlockPos, false) && !BlockUtils.canPlace(shulkerBlockPos, true)) return;
-            if (restockingType == 0) {
-                place(shulkerBlockPos, Hand.MAIN_HAND, 8, true, true, true);
-            } else {
-                place(shulkerBlockPos, Hand.MAIN_HAND, 7, true, true, true);
-            }
+            place(shulkerBlockPos, Hand.MAIN_HAND, s_slot, true, true, true);
             return;
         }
 
@@ -379,17 +521,13 @@ public class IceHighwayBuilder extends Module {
             stacksStolen = 0;
         }
         if ((stacksStolen >= numberOfSlotsToSteal)
-                || stacksStolen >= 27 // No more slots left (numberOfSlotsToSteal > stacksStolen because the shulker may not have the full amount)
-            // Worst case scenario is 6.75 seconds or 135 ticks
+                || stacksStolen >= 27
         ) {
             // Run post restocking
             isPostRestocking = true;
-
             stacksStolen = 0;
             slotNumber = 0;
-            
             wasRestocking = true;
-
             isPause = false;
             isPlacingShulker = false;
             restockingStartPosition = null;
@@ -399,17 +537,19 @@ public class IceHighwayBuilder extends Module {
             isRestocking = false;
         } else {
             ScreenHandler handler = mc.player.currentScreenHandler;
-            if (hasOpenedShulker) {
-                if (stealingDelay < 5) { // To add a 5 tick delay
+            if (stackRecentlyStolen) {
+                if (stealingDelay < 5) {
                     stealingDelay++;
                     return;
                 }
-                if (restockingType==1) {
-                    InvUtils.quickSwap().fromId(0).toId(slotNumber);
-                    stacksStolen ++;
-                } else {
-                    steal(handler, slotNumber);
-                }
+                stackRecentlyStolen = false;
+            }
+            if (restockingType == 1) {
+                InvUtils.quickSwap().fromId(t_slot).toId(slotNumber);
+                stacksStolen++;
+            }
+            else {
+                steal(handler, slotNumber);
                 slotNumber++;
                 stealingDelay = 0;
             }
@@ -417,6 +557,7 @@ public class IceHighwayBuilder extends Module {
     }
 
     private @NotNull BlockPos getBlockPos() {
+        assert mc.player != null;
         int offset = 2;
         return switch (getPlayerDirection()) {
             case NORTH -> new BlockPos(playerX, playerY, mc.player.getBlockZ() - offset);
@@ -429,12 +570,12 @@ public class IceHighwayBuilder extends Module {
 
     private void dropSlot(int slot3) {
         assert mc.player != null;
-        if (!blacklist.get().contains(mc.player.getInventory().getStack(slot3).getItem())) {
+        if (!throwBlacklist.get().contains(mc.player.getInventory().getStack(slot3).getItem())) {
             InvUtils.drop().slot(slot3);
         } else {
             int slot2 = 9;
             for (int j = 9; j < 36; j++) {
-                if (!blacklist.get().contains(mc.player.getInventory().getStack(slot3).getItem())) {
+                if (!throwBlacklist.get().contains(mc.player.getInventory().getStack(slot3).getItem())) {
                     slot2 = j;
                     break;
                 }
@@ -442,14 +583,14 @@ public class IceHighwayBuilder extends Module {
             InvUtils.quickSwap().fromId(slot3).toId(slot2);
         }
     }
-    private void handleClearInventory() {
+    public void handleClearInventory() {
         if (isRestocking || isPostRestocking)
             return;
-        assert mc.player != null;
+        assert mc.player != null && mc.world != null;
         if (stealingDelay == 0) {
-            if (!mc.world.getBlockState(getBlockPos()).isAir() 
-            && !(mc.world.getBlockState(getBlockPos()).getBlock() instanceof ShulkerBoxBlock)
-            && !hasOpenedShulker) {
+            if (!mc.world.getBlockState(getBlockPos()).isAir()
+                    && !(mc.world.getBlockState(getBlockPos()).getBlock() instanceof ShulkerBoxBlock)
+                    && !hasOpenedShulker) {
                 BlockUtils.breakBlock(getBlockPos(), true);
             }
         }
@@ -460,7 +601,7 @@ public class IceHighwayBuilder extends Module {
         trashCount = 0;
         for (int i = 0; i < 36; i++) {
             ItemStack itemStack = mc.player.getInventory().getStack(i);
-            if (!itemStack.isEmpty() && !blacklist.get().contains(itemStack.getItem())) {
+            if (!itemStack.isEmpty() && !throwBlacklist.get().contains(itemStack.getItem())) {
                 trashCount ++;
             }
         }
@@ -470,7 +611,7 @@ public class IceHighwayBuilder extends Module {
             mc.player.setYaw(oldYaw - 180);
             for (int i = 2; i < 36; i++) {
                 ItemStack itemStack = mc.player.getInventory().getStack(i);
-                if (!itemStack.isEmpty() && !blacklist.get().contains(itemStack.getItem()) && (trashCount > 1)) {
+                if (!itemStack.isEmpty() && !throwBlacklist.get().contains(itemStack.getItem()) && (trashCount > 1)) {
                     if (mc.player.getInventory().getStack(6).isEmpty()) {
                         InvUtils.move().from(6).to(i);
                         if (i < 9) {
@@ -538,7 +679,7 @@ public class IceHighwayBuilder extends Module {
             if (areShulkerBoxesNearby()) {
                 for (Item item : items) {
                     if (!isGatheringItems()) {
-                        if (BlueIceMiner.state == "waitingForPostRestock") {
+                        if (BlueIceMiner.state.equals("waitingForPostRestock")) {
                             BlueIceMiner.state = "waitingForGather";
                             BlueIceMiner.scanningWorld = true;
                         }
@@ -560,7 +701,7 @@ public class IceHighwayBuilder extends Module {
                 isPostRestocking = false;
                 isProcessingTasks = false;
                 hasQueued = false;
-                if (BlueIceMiner.state == "waitingForPostRestock") {
+                if (BlueIceMiner.state.equals("waitingForPostRestock")) {
                     BlueIceMiner.state = "idle";
                     BlueIceMiner.scanningWorld = true;
                 }
@@ -576,6 +717,7 @@ public class IceHighwayBuilder extends Module {
         Module iceRailAutoEat = Modules.get().get("ice-rail-auto-eat");
         Module iceRailNuker = Modules.get().get("ice-rail-nuker");
         Module icePlacer = Modules.get().get("ice-placer");
+
         BlueIceMiner object = new BlueIceMiner();
         if (object.getIsPathing()) {
             return;
@@ -626,7 +768,7 @@ public class IceHighwayBuilder extends Module {
             ItemStack BlueIceShulker = findBestBlueIceShulker();
 
             if (BlueIceShulker == null && !isPlacingShulker) {
-                if (BlueIceMiner.state == "idle") {
+                if (BlueIceMiner.state.equals("idle")) {
                     releaseForward();
                     BlueIceMiner.state = "goToPortal";
                     BlueIceMiner.scanningWorld = true;
@@ -826,7 +968,26 @@ public class IceHighwayBuilder extends Module {
         }
         int airBlocks = 0;
         BlockPos block1 = null;
+        int startBlock = getStartBlock(direction);
+        for (int i = 1; i <= 3; i++) {
+            switch (direction) {
+                case WEST -> block1 = new BlockPos(startBlock + i * 2, playerY+1, playerZ - 1);
+                case EAST -> block1 = new BlockPos(startBlock - i * 2, playerY+1, playerZ - 1);
+                case NORTH -> block1 = new BlockPos(playerX + 1, playerY+1, startBlock + i * 2);
+                case SOUTH -> block1 = new BlockPos(playerX + 1, playerY+1, startBlock - i * 2);
+
+            }
+            assert mc.world != null;
+            if (Blocks.BLUE_ICE != mc.world.getBlockState(block1).getBlock()) {
+                airBlocks++;
+            }
+        }
+        return airBlocks > 0 && airBlocks < 3;
+    }
+
+    private int getStartBlock(Direction direction) {
         int startBlock = 0;
+        assert mc.player != null;
         switch (direction) {
             case NORTH -> {
                 if (Math.abs(mc.player.getBlockZ()) % 2 == 0) {
@@ -857,32 +1018,13 @@ public class IceHighwayBuilder extends Module {
                 }
             }
         }
-        for (int i = 1; i <= 3; i++) {
-            switch (direction) {
-                case WEST -> {
-                    block1 = new BlockPos(startBlock + i * 2, playerY+1, playerZ - 1);
-                }
-                case EAST -> {
-                    block1 = new BlockPos(startBlock - i * 2, playerY+1, playerZ - 1);
-                }
-                case NORTH -> {
-                    block1 = new BlockPos(playerX + 1, playerY+1, startBlock + i * 2);
-                }
-                case SOUTH -> {
-                    block1 = new BlockPos(playerX + 1, playerY+1, startBlock - i * 2);
-                }
-            }
-            assert mc.world != null;
-            if (Blocks.BLUE_ICE != mc.world.getBlockState(block1).getBlock()) {
-                airBlocks++;
-            }
-        }
-        return airBlocks > 0 && airBlocks < 3;
+        return startBlock;
     }
 
     private void handleInvalidPosition(int Type) {
         assert mc.player != null;
         BlockPos target;
+
         target = getHighwayCoords();
 
         if (getHighwayCoords() == null) {
@@ -909,11 +1051,17 @@ public class IceHighwayBuilder extends Module {
         Direction direction = getPlayerDirection();
 
         switch (direction) {
-            case Direction.NORTH, Direction.EAST:
+            case Direction.NORTH:
+                mc.player.setYaw(135);
+                break;
+            case Direction.EAST:
                 mc.player.setYaw(-135);
                 break;
-            case Direction.SOUTH, Direction.WEST:
-                mc.player.setYaw(135);
+            case Direction.WEST:
+                mc.player.setYaw(45);
+                break;
+            case Direction.SOUTH:
+                mc.player.setYaw(-45);
                 break;
         }
     }
@@ -922,16 +1070,12 @@ public class IceHighwayBuilder extends Module {
         Module iceRailAutoEat = Modules.get().get("ice-rail-auto-eat");
         Module iceRailAutoReplenish = Modules.get().get("ice-rail-auto-replenish");
         Module scaffoldGrim = Modules.get().get("scaffold-grim");
-        Module blueIceMiner = Modules.get().get("blue-ice-miner");
-
         if (enableAutoEat.get() && !iceRailAutoEat.isActive()) iceRailAutoEat.toggle();
 
-        if (autoRefillHotbar.get())
-            if (iceRailAutoReplenish != null && !iceRailAutoReplenish.isActive())
-                iceRailAutoReplenish.toggle();
+        if (iceRailAutoReplenish != null && !iceRailAutoReplenish.isActive())
+            iceRailAutoReplenish.toggle();
 
         if (!scaffoldGrim.isActive()) scaffoldGrim.toggle();
-        if (!blueIceMiner.isActive()) blueIceMiner.toggle();
     }
 
     private void disableAllModules() {
@@ -940,8 +1084,7 @@ public class IceHighwayBuilder extends Module {
                 "ice-placer",
                 "ice-rail-auto-replenish",
                 "ice-rail-nuker",
-                "scaffold-grim",
-                "blue-ice-miner"
+                "scaffold-grim"
         };
 
         for (String moduleName : modulesToDisable) {
@@ -952,10 +1095,10 @@ public class IceHighwayBuilder extends Module {
         }
 
         Module iceRailAutoEat = Modules.get().get("ice-rail-auto-eat");
-        if (disableAutoEatAfterDigging.get() && iceRailAutoEat != null && iceRailAutoEat.isActive())
+        if (disableAutoEatAfterDigging.get() && iceRailAutoEat.isActive())
             iceRailAutoEat.toggle();
     }
     public Setting<List<Item>> getBlacklist(){
-        return blacklist;
+        return throwBlacklist;
     }
 }

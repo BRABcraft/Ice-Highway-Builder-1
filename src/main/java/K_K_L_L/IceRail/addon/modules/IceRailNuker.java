@@ -12,6 +12,7 @@
  import meteordevelopment.meteorclient.renderer.ShapeMode;
  import meteordevelopment.meteorclient.settings.*;
  import meteordevelopment.meteorclient.systems.modules.Module;
+ import meteordevelopment.meteorclient.systems.modules.Modules;
  import meteordevelopment.meteorclient.utils.player.Rotations;
  import meteordevelopment.meteorclient.utils.render.RenderUtils;
  import meteordevelopment.meteorclient.utils.render.color.SettingColor;
@@ -43,97 +44,21 @@
      private final SettingGroup sgRender = settings.createGroup("Render");
      private final MinecraftClient mc = MinecraftClient.getInstance();
      static boolean isBreaking;
- 
-     private final Setting<Integer> delay = sgGeneral.add(new IntSetting.Builder()
-         .name("delay")
-         .description("Delay in ticks between breaking blocks.")
-         .defaultValue(0)
-         .build()
-     );
- 
-     private final Setting<Integer> maxBlocksPerTick = sgGeneral.add(new IntSetting.Builder()
-         .name("max-blocks-per-tick")
-         .description("Maximum blocks to try to break per tick. Useful when insta mining.")
-         .defaultValue(3)
-         .min(1)
-         .sliderRange(1, 6)
-         .build()
-     );
- 
-     private final Setting<Boolean> swingHand = sgGeneral.add(new BoolSetting.Builder()
-         .name("swing-hand")
-         .description("Swing hand client side.")
-         .defaultValue(true)
-         .build()
-     );
- 
-     private final Setting<Boolean> packetMine = sgGeneral.add(new BoolSetting.Builder()
-         .name("packet-mine")
-         .description("Attempt to instamine everything at once.")
-         .defaultValue(true)
-         .build()
-     );
- 
-     private final Setting<Boolean> rotate = sgGeneral.add(new BoolSetting.Builder()
-         .name("rotate")
-         .description("Rotates server-side to the block being mined.")
-         .defaultValue(false)
-         .build()
-     );
- 
-     private final Setting<ListMode> listMode = sgWhitelist.add(new EnumSetting.Builder<ListMode>()
-         .name("list-mode")
-         .description("Selection mode.")
-         .defaultValue(ListMode.Blacklist)
-         .build()
-     );
- 
-     private final Setting<List<Block>> blacklist = sgWhitelist.add(new BlockListSetting.Builder()
-         .name("blacklist")
-         .description("The blocks you don't want to mine.")
-         .defaultValue(Blocks.BLUE_ICE)
-         .visible(() -> listMode.get() == ListMode.Blacklist)
-         .build()
-     );
- 
-     private final Setting<List<Block>> whitelist = sgWhitelist.add(new BlockListSetting.Builder()
-         .name("whitelist")
-         .description("The blocks you want to mine.")
-         .visible(() -> listMode.get() == ListMode.Whitelist)
-         .build()
-     );
- 
-     private final Setting<Boolean> enableRenderBreaking = sgRender.add(new BoolSetting.Builder()
-         .name("broken-blocks")
-         .description("Enable rendering broken blocks.")
-         .defaultValue(true)
-         .build()
-     );
- 
-     private final Setting<ShapeMode> shapeModeBreak = sgRender.add(new EnumSetting.Builder<ShapeMode>()
-         .name("nuke-block-mode")
-         .description("How the shapes for broken blocks are rendered.")
-         .defaultValue(ShapeMode.Both)
-         .visible(enableRenderBreaking::get)
-         .build()
-     );
- 
-     private final Setting<SettingColor> sideColor = sgRender.add(new ColorSetting.Builder()
-         .name("side-color")
-         .description("The side color of the target block rendering.")
-         .defaultValue(new SettingColor(255, 0, 0, 80))
-         .visible(enableRenderBreaking::get)
-         .build()
-     );
- 
-     private final Setting<SettingColor> lineColor = sgRender.add(new ColorSetting.Builder()
-         .name("line-color")
-         .description("The line color of the target block rendering.")
-         .defaultValue(new SettingColor(255, 0, 0, 255))
-         .visible(enableRenderBreaking::get)
-         .build()
-     );
- 
+
+     IceHighwayBuilder iceHighwayBuilder = Modules.get().get(IceHighwayBuilder.class);
+     Setting<Integer> delay = iceHighwayBuilder.nukerDelay;
+     Setting<Integer> maxBlocksPerTick = iceHighwayBuilder.nukerMaxBlocksPerTick;
+     Setting<Boolean> swingHand = iceHighwayBuilder.nukerSwingHand;
+     Setting<Boolean> packetMine = iceHighwayBuilder.nukerPacketMine;
+     Setting<Boolean> rotate = iceHighwayBuilder.nukerRotate;
+     Setting<IceRailNuker.ListMode> listMode = iceHighwayBuilder.nukerListMode;
+     Setting<List<Block>> blacklist = iceHighwayBuilder.nukerBlacklist;
+     Setting<List<Block>> whitelist = iceHighwayBuilder.nukerWhitelist;
+     Setting<Boolean> enableRenderBreaking = iceHighwayBuilder.nukerEnableRenderBreaking;
+     Setting<ShapeMode> shapeModeBreak = iceHighwayBuilder.shapeModeBreak;
+     Setting<SettingColor> sideColor = iceHighwayBuilder.sideColor;
+     Setting<SettingColor> lineColor = iceHighwayBuilder.lineColor;
+
      private final List<BlockPos> blocks = new ArrayList<>();
      private boolean firstBlock;
      private final BlockPos.Mutable lastBlockPos = new BlockPos.Mutable();

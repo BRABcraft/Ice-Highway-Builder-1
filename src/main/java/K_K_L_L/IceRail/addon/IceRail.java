@@ -25,6 +25,7 @@ public class IceRail extends MeteorAddon {
         Modules.get().add(new IcePlacer());
         Modules.get().add(new IceRailGatherItem());
         Modules.get().add(new BlueIceMiner());
+        Modules.get().add(new PickaxeRepairer());
     }
 
     @Override

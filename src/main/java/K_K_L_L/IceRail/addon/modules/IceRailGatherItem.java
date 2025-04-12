@@ -54,6 +54,7 @@ public class IceRailGatherItem extends Module {
         super(IceRail.CATEGORY, "ice-rail-gather-item", "A helper module that gathers nearby items.");
     }
 
+
     private record ItemLocation(BlockPos pos, boolean isAccessible, double distanceToPlayer) {
         static boolean isLocationAccessible(World world, BlockPos pos) {
             BlockState state = world.getBlockState(pos);
