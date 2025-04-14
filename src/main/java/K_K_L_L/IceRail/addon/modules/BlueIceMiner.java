@@ -28,6 +28,7 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.ShulkerBoxBlock;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.option.GameOptions;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.passive.PolarBearEntity;
@@ -348,7 +349,7 @@ public class BlueIceMiner extends Module {
         assert mc.player != null;
         List<LivingEntity> targets = mc.world.getEntitiesByClass(
                 LivingEntity.class,
-                mc.player.getBoundingBox().expand(16),
+                mc.player.getBoundingBox().expand(24),
                 e -> e instanceof ZombieEntity);
         if (targets == null || targets.isEmpty()) {
             return;
@@ -361,11 +362,13 @@ public class BlueIceMiner extends Module {
             }
         }
         if (target == null) return;
+        error("drowned has trident");
         BlockPos targetLocation = target.getBlockPos();
         if (PlayerUtils.isWithin(targetLocation, 2.0)) return;
         mc.player.setYaw((float) Rotations.getYaw(targetLocation));
         mc.player.setPitch((float) Rotations.getPitch(targetLocation));
         mc.options.forwardKey.setPressed(true);
+        mc.options.sneakKey.setPressed(false);
     }
 
     private void steal(ScreenHandler handler, int slot_number) {
@@ -624,7 +627,7 @@ public class BlueIceMiner extends Module {
                     for (int x = sx - j; x <= sx + j; x++) {
                         BlockPos blockPos = new BlockPos(x, y, z);
                         Block block = mc.world.getBlockState(blockPos).getBlock();
-                        if ((block == Blocks.BLUE_ICE) &&
+                        if ((block == Blocks.BLUE_ICE || block == Blocks.SNOW) &&
                                 !blockPosList.contains(blockPos) && PlayerUtils.isWithin(blockPos, 3.5)) {
                             blockPosList.add(blockPos);
                         }
@@ -666,6 +669,8 @@ public class BlueIceMiner extends Module {
     }
 
     private ArrayList<BlockPos> getIcebergSlice() {
+        assert mc.player != null;
+        assert mc.world != null;
         BlockPos playerPos = mc.player.getBlockPos();
         int sx = playerPos.getX();
         int sz = playerPos.getZ();
@@ -674,7 +679,7 @@ public class BlueIceMiner extends Module {
             for(int x = sx - 7; x <= sx + 7; x++) {
                 for(int z = sz - 7; z <= sz + 7; z++) {
                     BlockPos block = new BlockPos(x, y, z);
-                    if (PlayerUtils.isWithin(block, 7.0) && mc.world.getBlockState(block).getBlock() == Blocks.BLUE_ICE) {
+                    if (mc.world.getBlockState(block).getBlock() == Blocks.BLUE_ICE) {
                         slice.add(block);
                     }
                 }
@@ -1311,7 +1316,7 @@ public class BlueIceMiner extends Module {
 
     private void lookInRandomDirection() {
         assert mc.player != null;
-        mc.player.setYaw((float) (Math.random() * 360 - 180));
+        mc.player.setYaw((float) (Math.random() * 120) + mc.player.getYaw() + 180);
     }
 
     //This method is used when player has landed but is not near blue ice.
@@ -1403,33 +1408,32 @@ public class BlueIceMiner extends Module {
     private void centerPlayer() {
         assert mc.player != null;
         mc.player.setYaw(-90.0f);
-        double dx = Math.abs(mc.player.getPos().x % 1);
-        double dz = Math.abs(mc.player.getPos().z % 1);
-        error("center player dx: " + dx + " dz: " + dz);
-        if (dx > 0.6) {
-            mc.options.backKey.setPressed(true);
-        } else if (dx < 0.4) {
-            mc.options.forwardKey.setPressed(true);
+        GameOptions ops = mc.options;
+
+        boolean choice = Math.abs(mc.player.getPos().x % 1) > 0.5;
+        if (mc.player.getPos().x > 0) {
+            ops.backKey.setPressed(choice);
+            ops.forwardKey.setPressed(!choice);
         } else {
-            mc.options.backKey.setPressed(false);
-            mc.options.forwardKey.setPressed(false);
+            ops.backKey.setPressed(!choice);
+            ops.forwardKey.setPressed(choice);
         }
-        if (dz > 0.6) {
-            mc.options.leftKey.setPressed(true);
-        } else if (dz < 0.4) {
-            mc.options.rightKey.setPressed(true);
+        choice = Math.abs(mc.player.getPos().z % 1) > 0.5;
+        if (mc.player.getPos().z > 0) {
+            ops.leftKey.setPressed(choice);
+            ops.rightKey.setPressed(!choice);
         } else {
-            mc.options.rightKey.setPressed(false);
-            mc.options.leftKey.setPressed(false);
+            ops.leftKey.setPressed(!choice);
+            ops.rightKey.setPressed(choice);
         }
     }
-
+    private ArrayList<BlockPos> range = null;
+    private ArrayList<BlockPos> slice = null;
     private void handleMineBlueIceInRange() {
         assert mc.player != null;
         assert mc.world != null;
-
-        ArrayList<BlockPos> range = getBlueIceInRange();
-        ArrayList<BlockPos> slice = getIcebergSlice();
+        range = getBlueIceInRange();
+        slice = getIcebergSlice();
 
         //Air is on a scale of 0-300
         if (mc.player.getAir() < 30 || wasBreathing) {
@@ -1460,11 +1464,11 @@ public class BlueIceMiner extends Module {
                 //Escape the indecisive loop by walking in different directions
                 walkForward = false;
                 error("Indecisive");
-                if (tick % 60 < 20) {
+                if (tick % 120 < 40) {
                     mc.options.backKey.setPressed(true);
                     mc.options.leftKey.setPressed(false);
                     mc.options.rightKey.setPressed(false);
-                } else if (tick % 60 < 40) {
+                } else if (tick % 120 < 80) {
                     mc.options.leftKey.setPressed(true);
                     mc.options.rightKey.setPressed(false);
                     mc.options.backKey.setPressed(false);
@@ -1506,12 +1510,18 @@ public class BlueIceMiner extends Module {
                 }
                 if (mc.player.getY() < slice_minY) {
                     wasTowering = true;
-                    mc.player.setPitch(90.0f);
-                    mc.options.forwardKey.setPressed(false);
-                    mc.options.jumpKey.setPressed(true);
                     mc.options.sneakKey.setPressed(false);
-                    mc.options.attackKey.setPressed(false);
+                    mc.options.forwardKey.setPressed(false);
                     mc.options.backKey.setPressed(false);
+                    if (mc.world.getBlockState(mc.player.getBlockPos().up(2)).isAir()) {
+                        mc.player.setPitch(90.0f);
+                        mc.options.jumpKey.setPressed(true);
+                        mc.options.attackKey.setPressed(false);
+                    } else {
+                        mc.player.setPitch(-90.0f);
+                        mc.options.jumpKey.setPressed(false);
+                        mc.options.attackKey.setPressed(true);
+                    }
                 } else {
                     wasTowering = false;
                     lookAtBlock(slice.getFirst());
@@ -1532,12 +1542,12 @@ public class BlueIceMiner extends Module {
             BlockPos playerPos = mc.player.getBlockPos();
 
             //Prevents the staring at snow layer glitch
-            if (getLookingAtBlockPos() == null) {
-                error("looked down one block");
-                lookAtBlock(range.getFirst().up(-1));
-            } else {
-                lookAtBlock(range.getFirst());
-            }
+            //if (getLookingAtBlockPos() == null) {
+            //    error("looked down one block");
+            //    lookAtBlock(range.getFirst().up(-1));
+            //} else {
+            //    lookAtBlock(range.getFirst());
+            //}
 
             //Check if player is over blue ice
             boolean isOverBlueIce = false;
