@@ -96,7 +96,6 @@ public class IceHighwayBuilder extends Module {
     private final SettingGroup sgAutoEat = settings.createGroup("Auto Eat");
     private final SettingGroup sgInventory = settings.createGroup("Inventory Management");
     private final SettingGroup sgIceRailNuker = settings.createGroup("Ice Rail Nuker");
-    private final SettingGroup sgScaffoldGrim = settings.createGroup("Scaffold Grim");
 
     //Module Enabling settings
     private final Setting<Boolean> enableBlueIceMiner = sgEnable.add(new BoolSetting.Builder()
@@ -298,42 +297,6 @@ public class IceHighwayBuilder extends Module {
             .visible(nukerEnableRenderBreaking::get)
             .build()
     );
-    //</editor-fold>
-    //ScaffoldGrim settings
-    public final Setting<ScaffoldGrim.ListMode> scaffoldBlocksFilter = sgScaffoldGrim.add(new EnumSetting.Builder<ScaffoldGrim.ListMode>()
-            .name("blocks-filter")
-            .description("How to use the block list setting")
-            .defaultValue(ScaffoldGrim.ListMode.Blacklist)
-            .build()
-    );
-    //<editor-fold desc="scaffoldBlocks">
-    public final Setting<List<Block>> scaffoldBlocks = sgScaffoldGrim.add(new BlockListSetting.Builder()
-            .name("blocks")
-            .description("Selected blocks.")
-            .defaultValue(
-                    Blocks.BLUE_ICE,
-                    Blocks.ENDER_CHEST,
-                    Blocks.SHULKER_BOX,
-                    Blocks.WHITE_SHULKER_BOX,
-                    Blocks.ORANGE_SHULKER_BOX,
-                    Blocks.MAGENTA_SHULKER_BOX,
-                    Blocks.LIGHT_BLUE_SHULKER_BOX,
-                    Blocks.YELLOW_SHULKER_BOX,
-                    Blocks.LIME_SHULKER_BOX,
-                    Blocks.PINK_SHULKER_BOX,
-                    Blocks.GRAY_SHULKER_BOX,
-                    Blocks.LIGHT_GRAY_SHULKER_BOX,
-                    Blocks.CYAN_SHULKER_BOX,
-                    Blocks.PURPLE_SHULKER_BOX,
-                    Blocks.BLUE_SHULKER_BOX,
-                    Blocks.BROWN_SHULKER_BOX,
-                    Blocks.GREEN_SHULKER_BOX,
-                    Blocks.RED_SHULKER_BOX,
-                    Blocks.BLACK_SHULKER_BOX
-            )
-            .build()
-    );
-    //</editor-fold>
 
     public Direction getPlayerCurrentDirection() {
         assert mc.player != null;

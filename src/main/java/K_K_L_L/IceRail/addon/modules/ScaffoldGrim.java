@@ -34,9 +34,41 @@ public class ScaffoldGrim extends Module {
         super(IceRail.CATEGORY, "scaffold-grim", "Places blocks in front of you.");
     }
 
-    IceHighwayBuilder iceHighwayBuilder = Modules.get().get(IceHighwayBuilder.class);
-    Setting<ScaffoldGrim.ListMode> blocksFilter = iceHighwayBuilder.scaffoldBlocksFilter;
-    Setting<List<Block>> blocks = iceHighwayBuilder.scaffoldBlocks;
+    private final SettingGroup sgGeneral = settings.createGroup("General");
+
+    public final Setting<ScaffoldGrim.ListMode> blocksFilter = sgGeneral.add(new EnumSetting.Builder<ScaffoldGrim.ListMode>()
+            .name("blocks-filter")
+            .description("How to use the block list setting")
+            .defaultValue(ScaffoldGrim.ListMode.Blacklist)
+            .build()
+    );
+
+    public final Setting<List<Block>> blocks = sgGeneral.add(new BlockListSetting.Builder()
+            .name("blocks")
+            .description("Selected blocks.")
+            .defaultValue(
+                    Blocks.BLUE_ICE,
+                    Blocks.ENDER_CHEST,
+                    Blocks.SHULKER_BOX,
+                    Blocks.WHITE_SHULKER_BOX,
+                    Blocks.ORANGE_SHULKER_BOX,
+                    Blocks.MAGENTA_SHULKER_BOX,
+                    Blocks.LIGHT_BLUE_SHULKER_BOX,
+                    Blocks.YELLOW_SHULKER_BOX,
+                    Blocks.LIME_SHULKER_BOX,
+                    Blocks.PINK_SHULKER_BOX,
+                    Blocks.GRAY_SHULKER_BOX,
+                    Blocks.LIGHT_GRAY_SHULKER_BOX,
+                    Blocks.CYAN_SHULKER_BOX,
+                    Blocks.PURPLE_SHULKER_BOX,
+                    Blocks.BLUE_SHULKER_BOX,
+                    Blocks.BROWN_SHULKER_BOX,
+                    Blocks.GREEN_SHULKER_BOX,
+                    Blocks.RED_SHULKER_BOX,
+                    Blocks.BLACK_SHULKER_BOX
+            )
+            .build()
+    );
 
     private int tickCounter = 0;
 

@@ -5,6 +5,7 @@ import com.mojang.logging.LogUtils;
 import meteordevelopment.meteorclient.addons.GithubRepo;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
 import meteordevelopment.meteorclient.systems.modules.Category;
+import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import org.slf4j.Logger;
 
@@ -26,6 +27,10 @@ public class IceRail extends MeteorAddon {
         Modules.get().add(new IceRailGatherItem());
         Modules.get().add(new BlueIceMiner());
         Modules.get().add(new PickaxeRepairer());
+        Module BlueIceMiner = Modules.get().get("blue-ice-miner");
+        if (BlueIceMiner.isActive()) {
+            BlueIceMiner.toggle();
+        }
     }
 
     @Override
