@@ -9,9 +9,13 @@ import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.utils.player.ChatUtils;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
+import meteordevelopment.meteorclient.utils.player.Rotations;
+import meteordevelopment.meteorclient.utils.world.BlockUtils;
+import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.ItemEntity;
+import net.minecraft.fluid.Fluids;
 import net.minecraft.item.Item;
 import net.minecraft.item.Items;
 import net.minecraft.world.World;
@@ -126,13 +130,23 @@ public class IceRailGatherItem extends Module {
                     boolean isAccessible = ItemLocation.isLocationAccessible(world, itemPos);
                     itemLocations.add(new ItemLocation(itemPos, isAccessible, distance));
                 });
-
-        return itemLocations.stream()
+        List<BlockPos> items = itemLocations.stream()
                 .sorted(Comparator
                         .comparing((ItemLocation loc) -> !loc.isAccessible)
                         .thenComparing(loc -> loc.distanceToPlayer))
                 .map(loc -> loc.pos)
                 .toList();
+        List<BlockPos> result = new ArrayList<>();
+        for (BlockPos itemPos : items) {
+            assert mc.world != null;
+            if (mc.world.getBlockState(itemPos).getCollisionShape(mc.world, itemPos).isEmpty() ^
+                    mc.world.getBlockState(itemPos.up()).getCollisionShape(mc.world, itemPos.up()).isEmpty()) {
+                result.add(itemPos.down());
+            } else {
+                result.add(itemPos);
+            }
+        }
+        return result;
     }
 
     private boolean canNotHoldMoreItems() {
@@ -195,6 +209,16 @@ public class IceRailGatherItem extends Module {
                     .getCustomGoalProcess()
                     .setGoalAndPath(new GoalBlock(targetLocation));
             resumeBaritone();
+            assert mc.player != null;
+            mc.player.setYaw((float) Rotations.getYaw(targetLocation));
+            mc.player.setPitch((float) Rotations.getPitch(targetLocation));
+            BlockPos downOne = mc.player.getBlockPos().down();
+            if (mc.player.getBlockPos() == targetLocation.withY(mc.player.getBlockY())) {
+                assert mc.world != null;
+                if (mc.world.getBlockState(downOne).getBlock() == Blocks.ICE) {
+                    BlockUtils.breakBlock(downOne, true);
+                }
+            }
         }
 
         scheduler1.schedule(() -> {

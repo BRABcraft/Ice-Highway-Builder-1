@@ -1074,7 +1074,7 @@ public class IceHighwayBuilder extends Module {
 
         if (iceRailAutoReplenish != null && !iceRailAutoReplenish.isActive())
             iceRailAutoReplenish.toggle();
-
+        Module ScaffoldGrim = Modules.get().get("scaffold-grim");
         if (!scaffoldGrim.isActive()) scaffoldGrim.toggle();
     }
 

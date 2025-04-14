@@ -38,24 +38,21 @@ public class ScaffoldGrim extends Module {
     Setting<ScaffoldGrim.ListMode> blocksFilter = iceHighwayBuilder.scaffoldBlocksFilter;
     Setting<List<Block>> blocks = iceHighwayBuilder.scaffoldBlocks;
 
-    public boolean isActive = false;
     private int tickCounter = 0;
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
-        assert mc.player != null && mc.world != null;
+        if (mc.player == null) return;
+        assert mc.world != null;
         tickCounter++;
         Direction playerDirection;
         BlockPos playerPos = mc.player.getBlockPos();
 
         // Only place a block every 3 ticks to avoid rubberband
         if (tickCounter % 4 != 0) return;
-        if (!isActive) return;
-        if (getPlayerDirection() == null) {
-            playerDirection = mc.player.getHorizontalFacing();
-        } else
-            playerDirection = getPlayerDirection();
-
+        if (!isActive()) return;
+        playerDirection = mc.player.getHorizontalFacing();
+        error("scaffoldGrim activated");
         FindItemResult item = null;
 
         // Find a block in the player's inventory
@@ -67,15 +64,12 @@ public class ScaffoldGrim extends Module {
                 // Check blacklist/whitelist
                 if (blocksFilter.get() == ListMode.Blacklist && blocks.get().contains(block)) continue;
                 if (blocksFilter.get() == ListMode.Whitelist && !blocks.get().contains(block)) continue;
-
-
                 item = InvUtils.findInHotbar(itemStack -> itemStack.getItem() == Items.NETHERRACK);
                 break;
             }
         }
 
         if (item == null) return;
-
         for (int offset = 1; offset <= 4; offset++) {
             BlockPos targetPos = switch (playerDirection) {
                 case NORTH -> playerPos.add(0, -1, -offset);
@@ -103,16 +97,5 @@ public class ScaffoldGrim extends Module {
     public enum ListMode {
         Whitelist,
         Blacklist
-    }
-
-    public boolean isActive() {
-        return isActive;
-    }
-    public void toggle() {
-        if (isActive) {
-            isActive = false;
-        } else {
-            isActive = true;
-        }
     }
 }
