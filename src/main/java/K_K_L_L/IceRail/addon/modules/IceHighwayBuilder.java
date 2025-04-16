@@ -847,6 +847,7 @@ public class IceHighwayBuilder extends Module {
         Vec3d hitPos = Vec3d.ofCenter(blockPos);
 
         Direction side = getPlaceSide(blockPos);
+        System.out.println("place side: " + side);
         if (side != null) {
             blockPos.offset(side);
             hitPos = hitPos.add(side.getOffsetX(), side.getOffsetY(), side.getOffsetZ());

@@ -49,7 +49,7 @@ public class IceRailAutoReplenish extends Module {
     //Tool, scaffold block, food, placing slot, trash slot, shulker slot
     public final Setting<Integer> toolSlot = sgGeneral.add(new IntSetting.Builder()
             .name("tool-slot")
-            .description("Flint and steel, pickaxes, and fireworks are swapped to this slot. Slot number must be unique.")
+            .description("Flint and steel, pickaxes, fireworks, and swords are swapped to this slot. Slot number must be unique.")
             .defaultValue(0)
             .min(0).max(8).build()
     );
