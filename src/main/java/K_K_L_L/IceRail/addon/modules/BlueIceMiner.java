@@ -82,6 +82,7 @@ public class BlueIceMiner extends Module {
     public static ArrayList<BlockPos> portalBlocks = new ArrayList<BlockPos>();
     public static ArrayList<Integer> portalObby = new ArrayList<Integer>();
     public static boolean scanningWorld = true;
+    public boolean scanningWorld2 = true;
     public int tick = 0;
     public static boolean isPathing = false;
     public static DimensionType dimension;
@@ -213,6 +214,7 @@ public class BlueIceMiner extends Module {
             }
         }
         scanningWorld = true;
+        scanningWorld2 = true;
         mc.options.attackKey.setPressed(false);
         mc.options.sneakKey.setPressed(false);
         mc.options.forwardKey.setPressed(false);
@@ -279,19 +281,6 @@ public class BlueIceMiner extends Module {
             handleBuildPortal();
             return;
         }
-        if (state.equals("flyToBlueIce")) {
-            handleFlyToBlueIce();
-            return;
-        }
-        if (state.equals("land")) {
-            handleLand();
-            return;
-        }
-
-        //Pause mining when eating
-        if (getIsEating()) {
-            return;
-        }
 
         //Hostile mob elimination methods
         if (pathToTridentDrowned()) {
@@ -307,6 +296,20 @@ public class BlueIceMiner extends Module {
         } else {
             firstValidShulker = -1;
             returnToSlot = false;
+        }
+
+        if (state.equals("flyToBlueIce")) {
+            handleFlyToBlueIce();
+            return;
+        }
+        if (state.equals("land")) {
+            handleLand();
+            return;
+        }
+
+        //Pause mining when eating
+        if (getIsEating()) {
+            return;
         }
         if (state.equals("goToBlueIce")) {
             handleGoToBlueIce();
@@ -362,6 +365,7 @@ public class BlueIceMiner extends Module {
         }
 
         if (state.equals("dumpBlueIce")) {
+            scanningWorld2 = true;
             if (!hasOpenedShulker) {
                 openShulker();
                 error("8");
@@ -389,7 +393,6 @@ public class BlueIceMiner extends Module {
                 return true;
             }
             if (tick % 2 == 0) return true;
-            assert mc.interactionManager != null;
             for (int i = 0; i < 36; i++) {
                 ItemStack itemStack = mc.player.getInventory().getStack(i);
                 if (itemStack.getItem() == Items.BLUE_ICE) {
@@ -429,6 +432,7 @@ public class BlueIceMiner extends Module {
             if (blueIceTotal == blueIceSlots * 64 || remainingShulkers == 0) {
                 if (remainingShulkers > 0) {
                     assert firstValidShulker != -1;
+                    scanningWorld2 = true;
                     if (firstValidShulker != shulkerSlot) {
                         if (firstValidShulker < 9 || firstValidShulker == 500) {
                             if (firstValidShulker < 9) {
@@ -470,26 +474,29 @@ public class BlueIceMiner extends Module {
                     error("4");
                     return true;
                 } else {
-                    if (tick % 60 == 0) {
+                    error("remaining shulkers = 0");
+                    if (scanningWorld2) {
+                        scanningWorld2 = false;
+                        error("scanned world 477");
                         foundBlock = !searchWorld(Blocks.NETHER_PORTAL).isEmpty();
                     }
-                    if (foundBlock) {
-                        if (search(Items.OBSIDIAN, placingSlot, 0)) {
+                    if (!foundBlock) {
+                        if (!search(Items.OBSIDIAN, placingSlot, 0)) {
                             error("5");
                             return true;
                         }
                         handleBuildPortal();
                         error("6");
-                        return true;
                     } else {
                         BaritoneAPI.getProvider().getPrimaryBaritone().getGetToBlockProcess().getToBlock(Blocks.NETHER_PORTAL);
                         isPathing = true;
                         resumeBaritone();
                         error("7");
-                        return true;
                     }
+                    return true;
                 }
             } else {
+                scanningWorld2 = true;
                 if (firstEmptySlot != -1 && firstBlueIceSlot != -1) {
                     if (tick % 2 == 0) return true;
                     //spread firstBlueIceSlot to firstEmptySlot
@@ -672,6 +679,11 @@ public class BlueIceMiner extends Module {
         Inventory inventory = mc.player.getInventory();
         ItemStack hotbarStack = inventory.getStack(slot);
 
+        //Type 0: Searches for item, moves it to slot, opens shulker and retrieves the item
+        //Type 1: Searches for a non-silk pickaxe, moves it to slot, opens shulker and retrieves
+        //Type 2: Checks if inventory contains a pickaxe, slot doesn't matter
+        //Type 3: Check if inventory contains an item, shulker restocks it if not
+
         foundCount = 0;
         if (condition(hotbarStack, type, item)) {
             foundCount = 1;
@@ -722,24 +734,28 @@ public class BlueIceMiner extends Module {
         if (type != 2) {
             if (bestSlot != -1) {
                 if (bestSlot > 9) {
-                    InvUtils.quickSwap().fromId(5).toId(bestSlot);
+                    InvUtils.quickSwap().fromId(shulkerSlot).toId(bestSlot);
                 } else {
                     InvUtils.quickSwap().fromId(bestSlot).toId(9);
-                    InvUtils.quickSwap().fromId(5).toId(9);
+                    InvUtils.quickSwap().fromId(shulkerSlot).toId(9);
                 }
                 isPathing = false;
                 shulkerRestock(item == Items.FIREWORK_ROCKET ? 2 : 1, item, type);
                 return true;
-            } else {
-                return false;
             }
         } else {
-            return foundCount < 5;
+            if (foundCount < 5) {
+                return true;
+            }
         }
+
+        //echest
+        return false;
     }
 
     public static List<BlockPos> searchWorld(Block blockType) {
         final MinecraftClient mc = MinecraftClient.getInstance();
+
         // Get the player's current position
         assert mc.player != null;
         BlockPos playerPos = mc.player.getBlockPos();
@@ -756,6 +772,7 @@ public class BlueIceMiner extends Module {
                 for (int z = -renderDistance; z <= renderDistance; z++) {
                     // Calculate the BlockPos for each block
                     BlockPos currentPos = playerPos.east(x).withY(y).south(z);
+                    assert mc.world != null;
                     if (mc.world.getBlockState(currentPos).getBlock() == blockType) {
                         blockPosList.add(currentPos);
                     }
@@ -850,9 +867,8 @@ public class BlueIceMiner extends Module {
     }
     public static void packetMine(BlockPos block) {
         MinecraftClient mc = MinecraftClient.getInstance();
-        mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK, block, BlockUtils.getDirection(block)));
-        mc.player.swingHand(Hand.MAIN_HAND);
-        mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK, block, BlockUtils.getDirection(block)));
+        lookAtBlock(block);
+        mc.options.attackKey.setPressed(true);
     }
     public static boolean isInColdBiome(){
         MinecraftClient mc = MinecraftClient.getInstance();
@@ -1206,42 +1222,54 @@ public class BlueIceMiner extends Module {
         assert mc.world != null;
         assert (getPlayerDirection() != null);
 
-        int goalOff;
-        boolean test;
+        int goalOff = 0;
+        boolean test = true;
         boolean inOverworld = mc.world.getDimension().bedWorks();
-        goalOff = -210;
-        test = switch (getPlayerDirection()) {
-            case NORTH, SOUTH -> mc.player.getBlockX() != goalOff;
-            case EAST, WEST -> mc.player.getBlockZ() != goalOff;
-            default -> false;
-        };
-        switch (getPlayerDirection()) {
-            case NORTH, SOUTH -> {
-                if (mc.player.getBlockX() > goalOff + 2) {
+        if (!inOverworld) {
+            goalOff = -210;
+            test = switch (getPlayerDirection()) {
+                case NORTH, SOUTH -> mc.player.getBlockX() != goalOff;
+                case EAST, WEST -> mc.player.getBlockZ() != goalOff;
+                default -> false;
+            };
+            switch (getPlayerDirection()) {
+                case NORTH, SOUTH -> {
+                    if (mc.player.getBlockX() > goalOff + 2) {
+                        reached = false;
+                    }
+                }
+                case EAST, WEST -> {
+                    if (mc.player.getBlockZ() > goalOff + 2) {
+                        reached = false;
+                    }
+                }
+                default -> {
                     reached = false;
                 }
             }
-            case EAST, WEST -> {
-                if (mc.player.getBlockZ() > goalOff + 2) {
-                    reached = false;
-                }
-            }
-            default -> {
-                reached = false;
-            }
+        } else {
+            test = mc.player.getBlockY() < 63;
+            reached = false;
         }
         if (test && !reached) {
-            portalOriginBlock = null;
-            BlockPos goal = switch (getPlayerDirection()) {
-                case NORTH, SOUTH -> new BlockPos(goalOff, 114, mc.player.getBlockZ());
-                case EAST, WEST -> new BlockPos(mc.player.getBlockX(), 114, goalOff);
-                default -> new BlockPos(0, 0, 0); // This shouldn't happen.
-            };
-            BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(new GoalBlock(goal));
-            isPathing = true;
+            if (!inOverworld) {
+                portalOriginBlock = null;
+                BlockPos goal = switch (getPlayerDirection()) {
+                    case NORTH, SOUTH -> new BlockPos(goalOff, 114, mc.player.getBlockZ());
+                    case EAST, WEST -> new BlockPos(mc.player.getBlockX(), 114, goalOff);
+                    default -> new BlockPos(0, 0, 0); // This shouldn't happen.
+                };
+                BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(new GoalBlock(goal));
+                isPathing = true;
+            } else {
+                mc.options.jumpKey.setPressed(true);
+            }
             return;
         } else {
-            reached = true;
+            if (!reached) {
+                reached = true;
+                mc.options.jumpKey.setPressed(false);
+            }
             isPathing = true;
             //only generate a new portal location if it is null
             if (portalOriginBlock == null) {
@@ -1256,11 +1284,11 @@ public class BlueIceMiner extends Module {
             }
             error(String.valueOf(portalOriginBlock));
             ArrayList<Integer> offset = new ArrayList<>(Arrays.asList(
+                    0,-1, 1,-1, 2,-1, 3,-1,
                     0, 0, 1, 0, 2, 0, 3, 0,
                     0, 1, 1, 1, 2, 1, 3, 1,
                     0, 2, 1, 2, 2, 2, 3, 2,
-                    0, 3, 1, 3, 2, 3, 3, 3,
-                    0, 4, 1, 4, 2, 4, 3, 4)
+                    0, 3, 1, 3, 2, 3, 3, 3)
             );
             portalObby = new ArrayList<>(Arrays.asList(1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1));
             portalBlocks = new ArrayList<>();
@@ -1278,15 +1306,16 @@ public class BlueIceMiner extends Module {
         }
         buildTimer++;
         //make sure the block is air
-        if (buildTimer < 200) {
+        int ticksPerBlock = (inOverworld ? 20 : 10);
+        if (buildTimer < ticksPerBlock * 20) {
             isPathing = true;
-            BlockPos target = portalBlocks.get((buildTimer)/10);
-            boolean placeObby = (portalObby.get((buildTimer)/10)==1);
+            BlockPos target = portalBlocks.get((buildTimer)/ticksPerBlock);
+            boolean placeObby = (portalObby.get((buildTimer)/ticksPerBlock)==1);
             createPortal(target, placeObby);
         } else {
-            if (buildTimer < 280) {
-                BlockPos target = portalBlocks.get((buildTimer-200)/4);
-                boolean placeObby = (portalObby.get((buildTimer-200)/4)==1);
+            if (buildTimer < ticksPerBlock * 28) {
+                BlockPos target = portalBlocks.get((buildTimer-ticksPerBlock * 20) / ((int) (ticksPerBlock * 0.4)));
+                boolean placeObby = (portalObby.get((buildTimer-ticksPerBlock * 20) / ((int) (ticksPerBlock * 0.4)))==1);
                 createPortal(target, placeObby);
             } else {
                 if (mc.world.getBlockState(portalBlocks.get(2).up(1)).getBlock() != Blocks.NETHER_PORTAL) {
@@ -1299,7 +1328,10 @@ public class BlueIceMiner extends Module {
                     lookAtBlock(portalBlocks.get(2));
                     //right click
                     if (!mc.player.isUsingItem() && buildTimer % 5 == 0) {
-                        Utils.rightClick();
+                        airPlace(portalBlocks.get(2), switch (getPlayerDirection()) {
+                            case NORTH, SOUTH -> Direction.WEST;
+                            case EAST, WEST -> Direction.NORTH;
+                            default -> null;});
                     }
                 } else {
                     //portal finished
@@ -1536,7 +1568,7 @@ public class BlueIceMiner extends Module {
         } else {
 
             //[NEEDS TESTING] If player has left the frozen ocean, look randomly every 3 seconds until it is back.
-            if (!isInFrozenOcean && tick % 20 == 0) {
+            if (!isInFrozenOcean && tick % 60 == 0) {
                 lookInRandomDirection();
             }
         }
@@ -1846,7 +1878,22 @@ public class BlueIceMiner extends Module {
         assert mc.player != null;
         assert mc.world != null;
 
-        if (buildTimer % 10 < 3) {
+        boolean inOverworld = mc.world.getDimension().bedWorks();
+        List<Boolean> conditions;
+        if (inOverworld) {
+            conditions = Arrays.asList(
+                    buildTimer % 20 < 9,
+                    buildTimer % 20 < 18,
+                    buildTimer % 20 == 18
+            );
+        } else {
+            conditions = Arrays.asList(
+                    buildTimer % 10 < 3,
+                    buildTimer % 10 < 6,
+                    buildTimer % 10 == 8
+            );
+        }
+        if (conditions.get(0)) {
             switch (getPlayerDirection()) {
                 case NORTH, SOUTH -> {
                     if (!mc.world.getBlockState(target.east(1)).isAir()) {
@@ -1860,11 +1907,11 @@ public class BlueIceMiner extends Module {
                 }
             };
             //place the block
-        } else if (buildTimer % 10 < 6) {
+        } else if (conditions.get(1)) {
             if (!mc.world.getBlockState(target).isAir() && mc.world.getBlockState(target).getBlock() != Blocks.OBSIDIAN) {
                 packetMine(target);
             }
-        } else if (buildTimer % 10 == 8) {
+        } else if (conditions.get(2)) {
             if (placeObby) {
                 if (mc.world.getBlockState(target).getBlock() != Blocks.OBSIDIAN) {
                     BlockUtils.place(target, InvUtils.findInHotbar(itemStack -> itemStack.getItem() == Items.OBSIDIAN), true, 0, true, true);
@@ -1897,6 +1944,7 @@ public class BlueIceMiner extends Module {
 
         disablemodules();
         restockingType = 2;
+        assert mc.player != null;
         oldYaw = mc.player.getYaw();
         returnToState = state;
         NewState = "retrievingFromShulker";
@@ -1936,10 +1984,8 @@ public class BlueIceMiner extends Module {
             state = "idle";
             return;}
 
-
         assert mc.player != null;
         assert mc.world != null;
-
 
         if (!restockingStartPosition.equals(mc.player.getBlockPos())) {
             if (!isPause) {
@@ -1952,11 +1998,9 @@ public class BlueIceMiner extends Module {
             isPause = false;
         }
 
-
         if (isPause) {
             return;
         }
-
 
         shulkerBlockPos = getBlockPos();
         error(String.valueOf(shulkerBlockPos));
