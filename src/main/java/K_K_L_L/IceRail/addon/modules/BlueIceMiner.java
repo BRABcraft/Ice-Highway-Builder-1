@@ -10,6 +10,7 @@ import K_K_L_L.IceRail.addon.IceRail;
 import baritone.api.BaritoneAPI;
 import baritone.api.IBaritone;
 import baritone.api.pathing.goals.GoalBlock;
+import baritone.api.process.IElytraProcess;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
@@ -319,6 +320,24 @@ public class BlueIceMiner extends Module {
             handleMineBlueIceInRange();
             return;
         }
+
+        //After returning to the nether
+        if (state.equals("resumeBuilding")) {
+            handleResumeBuilding();
+        }
+    }
+
+    private void handleResumeBuilding() {
+        IceHighwayBuilder iceHighwayBuilder = Modules.get().get(IceHighwayBuilder.class);
+        if (!iceHighwayBuilder.isPlayerInValidPosition()) {
+            //[NEEDS TESTING] baritone efly
+            IElytraProcess elytraProcess = BaritoneAPI.getProvider().getPrimaryBaritone().getElytraProcess();
+            if (!elytraProcess.isActive()) {
+                elytraProcess.pathTo(getHighwayCoords());
+            }
+        } else {
+            //backtrack to blue ice
+        }
     }
     private boolean manageInventory() {
         assert mc.world != null;
@@ -477,12 +496,19 @@ public class BlueIceMiner extends Module {
                     error("remaining shulkers = 0");
                     if (scanningWorld2) {
                         scanningWorld2 = false;
-                        error("scanned world 477");
                         foundBlock = !searchWorld(Blocks.NETHER_PORTAL).isEmpty();
                     }
                     if (!foundBlock) {
                         if (!search(Items.OBSIDIAN, placingSlot, 0)) {
-                            error("5");
+                            error("No obsidian, cannot build a portal to return to the nether.");
+                            disableAllModules();
+                            toggle();
+                            return true;
+                        }
+                        if (!search(Items.FLINT_AND_STEEL, toolSlot, 0)) {
+                            error("No flint and steel, cannot build a portal to return to the nether.");
+                            disableAllModules();
+                            toggle();
                             return true;
                         }
                         handleBuildPortal();
@@ -678,6 +704,10 @@ public class BlueIceMiner extends Module {
         assert (mc.player != null);
         Inventory inventory = mc.player.getInventory();
         ItemStack hotbarStack = inventory.getStack(slot);
+
+        /*This method searches the inventory for an item and returns if the search was successful.
+         Depending on the Type, it also moves the item to the slot, or executes a shulker restock,
+         changing the state then changing it back when restocking is completed.*/
 
         //Type 0: Searches for item, moves it to slot, opens shulker and retrieves the item
         //Type 1: Searches for a non-silk pickaxe, moves it to slot, opens shulker and retrieves
@@ -1063,31 +1093,39 @@ public class BlueIceMiner extends Module {
     }
 
     private void handleGoToPortal() {
+        //Validity checks
         assert mc.player != null;
         assert mc.world != null;
 
-        //check if there are under 5 usable pickaxes
         reached = false;
-        if (search(null, 6, 2) && countUsablePickaxes() < 5) {
-            if (search(null, 5, 1)) {
-                //check if there are non-silk pickaxes to get xp
-                returnToState = "goToPortal";
-                repairCount = 5;
-                //Toggle off and activate PickaxeRepairer if the setting is true
-                return;
-            } else {
-                error("Too low on pickaxes and no non-silk pickaxes for repairing.");
-                disableAllModules();
-                isPathing = false;
+
+        //If there are under 5 usable pickaxes:
+        if (countUsablePickaxes() < 5) {
+
+            //If pickaxe repairer is enabled in the settings:
+            if (enablePickaxeRepairer.get()) {
+
+                //Enable PickaxeRepairer
+                Module pickaxeRepairer = Modules.get().get("pickaxe-repairer");
+                if (!pickaxeRepairer.isActive()) {
+                    pickaxeRepairer.toggle();
+                }
                 toggle();
                 return;
+            } else {
+                disableAllModules();
+                error("Cannot mine blue ice because there are too few usable pickaxes");
             }
         }
+
+        //If there are enough pickaxes, but no elytra, disable.
         if (!search(Items.ELYTRA, 6, 3)) {
             error("No elytra, cannot fly to blue ice.");
             disableAllModules();
             toggle();
             return;
+
+        //If there is an elytra in the inventory:
         } else {
             boolean test = false;
             for (int i = 0; i < mc.player.getInventory().size(); i++) {
@@ -1098,6 +1136,8 @@ public class BlueIceMiner extends Module {
                 }
             }
             if (mc.player.getEquippedStack(EquipmentSlot.CHEST).getItem() == Items.ELYTRA) {test = true;}
+
+            //Equip the elytra
             if (test) {
                 if (mc.player.getEquippedStack(EquipmentSlot.CHEST).getItem() != Items.ELYTRA) {
                     for (int i = 0; i < mc.player.getInventory().main.size(); i++) {
@@ -1114,12 +1154,18 @@ public class BlueIceMiner extends Module {
                 return;
             }
         }
+
+        //If there are enough pickaxes and the elytra was equipped but there aren't enough fireworks:
         if (!search(Items.FIREWORK_ROCKET, 4, 3)) {
             error("No firework rockets, cannot fly to blue ice.");
             disableAllModules();
             toggle();
             return;
+
+        //If there are enough fireworks:
         } else {
+
+            //Ensure fireworks are in hotbar
             int slot = -1;
             for (int i = 0; i < 36; i++) {
                 ItemStack stack = mc.player.getInventory().getStack(i);
@@ -1129,27 +1175,32 @@ public class BlueIceMiner extends Module {
                 }
             }
             if (slot > 8) {
-                InvUtils.quickSwap().fromId(4).toId(slot);
+                InvUtils.quickSwap().fromId(toolSlot).toId(slot);
                 return;}
         }
 
-        //search render distance for nether_portal, only search once to avoid lag
+        //Search render distance for nether a portal, only search for one tick to avoid lag.
         if (scanningWorld) {
             scanningWorld = false;
             foundBlock = !searchWorld(Blocks.NETHER_PORTAL).isEmpty();
             error("scanningWorld found? " + foundBlock);
         }
-        //go to the coords of the nearest group of nether portal frames if the player isn't there already
+
+        //If the player isn't there already go to the nearest nether portal
         if (foundBlock) {
             BaritoneAPI.getProvider().getPrimaryBaritone().getGetToBlockProcess().getToBlock(Blocks.NETHER_PORTAL);
             isPathing = true;
             error("going to nearest coords");
             return;
         }
-        //search moves the item to the slot if it returns true
+
+        //If player fails to retrieve obsidian from inventory or build nether portal is disabled:
         if (!search(Items.OBSIDIAN, 6, 0) || !buildNetherPortal.get()) {
-            // search for a non-silk touch pickaxe
+
+            //If player fails to retrieve a non-silk pickaxe, or build nether portal is disabled:
             if (!search(null, 5, 1) || !buildNetherPortal.get()) {
+
+                //If player is allowed to search on the main highway for a portal:
                 if (searchOnHighway.get()) {
                     error("search on highway");
                     BlockPos goal = switch (getPlayerDirection()) {
@@ -1162,57 +1213,61 @@ public class BlueIceMiner extends Module {
                         case EAST, WEST -> mc.player.getBlockZ() == 0;
                         default -> false;
                     };
-                    //  if searchOnHighway is enabled and player isn't yet at the highway then path to it
+
+                    //If the player isn't at the highway yet, path to it.
                     if (test1) {
                         BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(new GoalBlock(goal));
                         resumeBaritone();
                         error(String.valueOf(goal.withY(mc.player.getBlockY())));
                         isPathing = true;
-                        return;
                     } else {
-                        //if player is already at highway then walk forwards (add elytra bounce later)
+
+                        //[ADD ELYTRA BOUNCE] If the player is already at highway then walk forwards.
                         BaritoneAPI.getProvider().getPrimaryBaritone().getGetToBlockProcess().getToBlock(Blocks.NETHER_PORTAL);
                         resumeBaritone();
                         isPathing = true;
                         scanningWorld = tick % 200 == 0;
-                        return;
                     }
 
+                //If player can't build a portal but can't search on highway, or player can build portals but has no non-silk pickaxes and no obsidian, disable.
                 } else {
-                    error("No obsidian, echest, or non-silk touch pickaxe in inventory, and searchOnHighway is disabled.");
+                    error("No obsidian or non-silk touch pickaxe in inventory and searchOnHighway is disabled.");
                     disableAllModules();
                     toggle();
-                    return;
                 }
+
+            //If player has a non-silk pickaxe, retrieve an echest
             } else {
                 if(search(Items.ENDER_CHEST, 5, 0)) {
+
+                    //If retrieving succeeds, start mining echests
                     getRestockingStartPos();
                     shulkerBlockPos = mc.player.getBlockPos();
                     initialEchests = mc.player.getInventory().getStack(getEchestSlot()).getCount();
                     state = "miningEchests";
                     NewState = "waitingForGather";
                     returnToState = "goToPortal";
-                    return;
                 } else {
                     error("No echests, cannot get obsidian for the portal");
                     disableAllModules();
                     toggle();
-                    return;
                 }
             }
         } else {
-            if (search(Items.FLINT_AND_STEEL, 5, 0)) {
+
+            //If player has obsidian and is allowed to build portals:
+            if (search(Items.FLINT_AND_STEEL, toolSlot, 0)) {
+
+                //If flint and steel retrieving succeeds, build the portal
                 portalOriginBlock = null;
                 buildTimer = 0;
                 state = "buildPortal";
                 returnToState = "goToPortal";
-                return;
             } else {
                 error("No flint and steel found, cannot light portal");
                 disableAllModules();
                 isPathing = false;
                 toggle();
-                return;
             }
         }
     }
@@ -1614,7 +1669,7 @@ public class BlueIceMiner extends Module {
 
     private void lookInRandomDirection() {
         assert mc.player != null;
-        mc.player.setYaw((float) (Math.random() * 120) + mc.player.getYaw() + 180);
+        mc.player.setYaw((float) (Math.random() * 360));
     }
 
     //This method is used when player has landed but is not near blue ice.

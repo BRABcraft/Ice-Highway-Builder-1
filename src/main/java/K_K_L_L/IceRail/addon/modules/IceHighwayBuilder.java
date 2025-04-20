@@ -93,6 +93,7 @@ public class IceHighwayBuilder extends Module {
     public static Integer playerZ;
 
     private final SettingGroup sgEnable = settings.createGroup("Enable functions");
+    private final SettingGroup sgHighway = settings.createGroup("Highway to build");
     private final SettingGroup sgAutoEat = settings.createGroup("Auto Eat");
     private final SettingGroup sgInventory = settings.createGroup("Inventory Management");
     private final SettingGroup sgIceRailNuker = settings.createGroup("Ice Rail Nuker");
@@ -114,6 +115,25 @@ public class IceHighwayBuilder extends Module {
             .name("enable-auto-eat")
             .description("Pauses the current task and automatically eats.")
             .defaultValue(true)
+            .build()
+    );
+
+    public enum Highways {
+        East,
+        West,
+        South,
+        North,
+        Southeast,
+        Southwest,
+        Northeast,
+        Northwest
+    }
+
+    //Highway building setting
+    public final Setting<Highways> highway = sgHighway.add(new EnumSetting.Builder<Highways>()
+            .name("highway")
+            .description("Selection mode.")
+            .defaultValue(Highways.East)
             .build()
     );
     // Auto Eat Settings
@@ -908,7 +928,7 @@ public class IceHighwayBuilder extends Module {
         return false;
     }
 
-    private boolean isPlayerInValidPosition() {
+    public boolean isPlayerInValidPosition() {
         assert mc.player != null;
         switch (getPlayerDirection()) {
             case NORTH, SOUTH -> {
