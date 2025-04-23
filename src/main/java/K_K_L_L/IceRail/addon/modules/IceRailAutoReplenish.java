@@ -17,12 +17,14 @@ import meteordevelopment.meteorclient.utils.Utils;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.meteorclient.utils.player.SlotUtils;
 import meteordevelopment.orbit.EventHandler;
+import net.minecraft.block.Block;
 import net.minecraft.block.ShulkerBoxBlock;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.*;
 
+import java.util.List;
 import java.util.Objects;
 
 public class IceRailAutoReplenish extends Module {
@@ -86,7 +88,6 @@ public class IceRailAutoReplenish extends Module {
 
     private final ItemStack[] items = new ItemStack[10];
     private int tickDelayLeft;
-    public boolean isActive;
     public String toolSlotItem = "pickaxe"; //When pickaxe: Find and swap the best pickaxe using the existing method. Otherwise: skip
     //ScaffoldSlotItem is determined through an inventory scan with IceHighwayBuilder.scaffoldBlacklist
     public String foodSlotItem = "food"; // any type of food not in the blacklist
@@ -107,8 +108,20 @@ public class IceRailAutoReplenish extends Module {
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
-        if (!isActive) return;
-        boolean flag = false;
+        if (!isActive()) return;
+        int[] nums = {toolSlot.get(), foodSlot.get(), placingSlot.get(),
+                trashSlot.get(), shulkerSlot.get(), scaffoldSlot.get()};
+        for (int i = 0; i < nums.length; i++) {
+            for (int j = i + 1; j < nums.length; j++) {
+                if (nums[i] == nums[j]) {
+                    error("Ice Rail Autoreplenish error: All slots must be unique.");
+                    Module iceHighwayBuilder = Modules.get().get("ice-highway-builder");
+                    if (iceHighwayBuilder.isActive()) iceHighwayBuilder.toggle();
+                    toggle();
+                    return;
+                }
+            }
+        }
         if (tickDelayLeft <= 0) {
             tickDelayLeft = tickDelay.get();
 
@@ -116,33 +129,17 @@ public class IceRailAutoReplenish extends Module {
             handleShulkerSlot();
             handlePlacingSlot();
             handleFoodSlot();
+            handleScaffoldSlot();
         }
         else {
             tickDelayLeft--;
-            return;
-        }
-
-        if (!flag) {
-            error("Ice Rail Auto Replenish is not configured correctly, please configure the module and enable the \"Ice Highway Builder\" module once again.");
-            Module iceHighwayBuilder = Modules.get().get("ice-highway-builder");
-            if (iceHighwayBuilder.isActive()) iceHighwayBuilder.toggle();
-            toggle();
-        }
-    }
-    public boolean isActive() {
-        return isActive;
-    }
-    public void toggle() {
-        if (isActive) {
-            isActive = false;
-        } else {
-            isActive = true;
         }
     }
     private void handleToolSlot() {
         MinecraftClient mc = MinecraftClient.getInstance();
+        assert mc.player != null;
         Inventory inventory = mc.player.getInventory();
-        if (toolSlotItem != "pickaxe") return;
+        if (!toolSlotItem.equals("pickaxe")) return;
         ItemStack toolStack = inventory.getStack(toolSlot.get());
 
         if (toolStack.getItem() instanceof PickaxeItem
@@ -175,11 +172,11 @@ public class IceRailAutoReplenish extends Module {
                 ((BlockItem) currentStack.getItem()).getBlock() instanceof ShulkerBoxBlock) ||
                 !hasBlueiceInShulker(currentStack)) {
             ItemStack shulkerFound;
-            if (shulkerSlotItem == "blue ice") {
+            if (shulkerSlotItem.equals("blue ice")) {
                 shulkerFound = findBestBlueIceShulker();
-            } else if (shulkerSlotItem == "pickaxes") {
+            } else if (shulkerSlotItem.equals("pickaxes")) {
                 shulkerFound = findBestPicksShulker();
-            } else if (shulkerSlotItem == "food") {
+            } else if (shulkerSlotItem.equals("food")) {
                 shulkerFound = findFoodShulker();
             } else {
                 shulkerFound = null; //convert string to Item
@@ -325,20 +322,39 @@ public class IceRailAutoReplenish extends Module {
         }
     }
 
+    private void handleScaffoldSlot() {
+        assert mc.player != null;
+        ScaffoldGrim scaffoldGrim = Modules.get().get(ScaffoldGrim.class);
+        ScaffoldGrim.ListMode blocksFilter = scaffoldGrim.blocksFilter.get();
+        List<Block> blocks = scaffoldGrim.blocks.get();
+        for (int i = 9; i < 36; i++) {
+            Item foundItem = mc.player.getInventory().getStack(i).getItem();
+            if (foundItem instanceof BlockItem blockItem) {
+                Block block = blockItem.getBlock();
+                if (blocksFilter == ScaffoldGrim.ListMode.Blacklist && blocks.contains(block)) continue;
+                if (blocksFilter == ScaffoldGrim.ListMode.Whitelist && !blocks.contains(block)) continue;
+                InvUtils.shiftClick().slotId(i);
+                break;
+            }
+        }
+    }
+
     private void handleFoodSlot() {
         assert mc.player != null;
         int slot = foodSlot.get();
-        Item desiredItem;
-        if (foodSlotItem == "gapple") {
+        Item desiredItem = Items.AIR;
+        if (foodSlotItem.equals("gapple")) {
             desiredItem = Items.ENCHANTED_GOLDEN_APPLE;
         } else {
-            desiredItem = Items.ENCHANTED_GOLDEN_APPLE;
-            for (int i = 0; i < Objects.requireNonNull(mc.player).getInventory().size(); i++) {
+            for (int i = 0; i < 36; i++) {
                 ItemStack stack = mc.player.getInventory().getStack(i);
                 if (stack.getItem().getComponents().get(DataComponentTypes.FOOD) != null &&
                         !Modules.get().get(IceRailAutoEat.class).blacklist.get().contains(stack.getItem())
                 ) {
                     desiredItem = stack.getItem();
+                    if (i > 8) {
+                        InvUtils.quickSwap().fromId(slot).toId(i);
+                    }
                     break;
                 }
             }

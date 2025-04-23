@@ -113,7 +113,6 @@ public class IceRailAutoEat extends Module {
     );
 
     public static boolean eating;
-    public boolean isActive = true;
     public static boolean getIsEating() {
         return eating;
     }
@@ -276,17 +275,19 @@ public class IceRailAutoEat extends Module {
         boolean hunger = mc.player.getHungerManager().getFoodLevel() <= hungerThreshold.get();
         boolean isBurning = mc.player.isOnFire();
         boolean hasFireResistance = mc.player.hasStatusEffect(StatusEffects.FIRE_RESISTANCE);
-
+        IceRailAutoReplenish autoReplenish = Modules.get().get(IceRailAutoReplenish.class);
         // Special case for enchanted golden apple: eat if burning and no fire resistance
         if (isBurning && !hasFireResistance) {
             for (int i = 0; i < 9; i++) {
                 if (mc.player.getInventory().getStack(i).getItem() == Items.ENCHANTED_GOLDEN_APPLE) {
+                    autoReplenish.foodSlotItem = "gapple";
                     return true;
                 }
             }
         }
 
         // Regular eating conditions for other food based on hunger and health thresholds
+        autoReplenish.foodSlotItem = "food";
         return thresholdMode.get().test(health, hunger);
     }
 
@@ -348,17 +349,6 @@ public class IceRailAutoEat extends Module {
 
         public boolean test(boolean health, boolean hunger) {
             return predicate.test(health, hunger);
-        }
-    }
-
-    public boolean isActive() {
-        return isActive;
-    }
-    public void toggle() {
-        if (isActive) {
-            isActive = false;
-        } else {
-            isActive = true;
         }
     }
 }

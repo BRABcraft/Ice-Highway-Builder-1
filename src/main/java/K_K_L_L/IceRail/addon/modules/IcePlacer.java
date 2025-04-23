@@ -6,25 +6,53 @@ import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.meteorclient.utils.world.BlockUtils;
 import meteordevelopment.orbit.EventHandler;
 import K_K_L_L.IceRail.addon.IceRail;
+import net.minecraft.item.Item;
 import net.minecraft.item.Items;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.fluid.FluidState;
 import net.minecraft.block.BlockState;
 
+import static K_K_L_L.IceRail.addon.Utils.airPlace;
 import static K_K_L_L.IceRail.addon.Utils.switchToItem;
 import static K_K_L_L.IceRail.addon.modules.IceHighwayBuilder.*;
 import static K_K_L_L.IceRail.addon.modules.IceRailAutoEat.getIsEating;
+import static K_K_L_L.IceRail.addon.modules.IceRailNuker.getIsBreaking;
+import static K_K_L_L.IceRail.addon.modules.IceRailNuker.getIsBreakingHardBlock;
+import static meteordevelopment.meteorclient.utils.world.BlockUtils.getPlaceSide;
 
 public class IcePlacer extends Module {
     public IcePlacer() {
         super(IceRail.CATEGORY, "ice-placer", "Places ice blocks with air gaps between them.");
+    }
+    int tick = 0;
+    public static BlockPos targetPos;
+    private boolean place(Item item, BlockPos blockPos, boolean onlyOnLava) {
+        assert mc.world != null;
+        boolean condition = onlyOnLava ? !mc.world.getBlockState(blockPos).getFluidState().isEmpty() : mc.world.isAir(blockPos);
+        if (condition) {
+            switchToItem(item);
+//            airPlace(blockPos, switch (getPlayerDirection()) {
+//                case NORTH, SOUTH -> Direction.EAST;
+//                case EAST, WEST -> Direction.NORTH;
+//                default -> null;
+//            });
+            mc.options.attackKey.setPressed(false);
+            airPlace(blockPos, Direction.DOWN);
+            return true;
+        }
+        return false;
     }
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         assert mc.world != null;
         assert mc.player != null;
+        tick++;
+        if (tick % 3 < 2) return;
+        playerX = mc.player.getBlockX();
+        playerY = mc.player.getBlockY();
+        playerZ = mc.player.getBlockZ();
         if (isGoingToHighway || getIsEating()) return;
 
         Direction direction = getPlayerDirection();
@@ -34,7 +62,7 @@ public class IcePlacer extends Module {
         }
 
         boolean shouldPlace;
-        BlockPos targetPos, targetPos2, guardrail1, guardrail2;
+        BlockPos targetPos2, guardrail1, guardrail2;
 
         switch (direction) {
             case NORTH -> {
@@ -69,41 +97,14 @@ public class IcePlacer extends Module {
                 return;
             }
         }
-        if (mc.world.isAir(guardrail1)) {
-            switchToItem(Items.NETHERRACK);
-            BlockUtils.place(guardrail1, InvUtils.findInHotbar(itemStack ->
-                    itemStack.getItem() == Items.NETHERRACK), false, 0, true, true);
-            return;
-        }
-        if (mc.world.isAir(guardrail2)) {
-            switchToItem(Items.NETHERRACK);
-            BlockUtils.place(guardrail2, InvUtils.findInHotbar(itemStack ->
-                    itemStack.getItem() == Items.NETHERRACK), false, 0, true, true);
-            return;
-        }
-        if (!mc.world.getBlockState(guardrail1.up(-1)).getFluidState().isEmpty()) {
-            switchToItem(Items.NETHERRACK);
-            BlockUtils.place(guardrail1.up(-1), InvUtils.findInHotbar(itemStack ->
-                    itemStack.getItem() == Items.NETHERRACK), false, 0, true, true);
-            return;
-        }
-        if (!mc.world.getBlockState(guardrail2.up(-1)).getFluidState().isEmpty()) {
-            switchToItem(Items.NETHERRACK);
-            BlockUtils.place(guardrail2.up(-1), InvUtils.findInHotbar(itemStack ->
-                    itemStack.getItem() == Items.NETHERRACK), false, 0, true, true);
-            return;
-        }
+        if (getIsBreaking() || getIsBreakingHardBlock()) return;
+        if (place(Items.NETHERRACK, guardrail1, false)) return;
+        if (place(Items.NETHERRACK, guardrail2, false)) return;
+        if (place(Items.NETHERRACK, guardrail1.up(-1), true)) return;
+        if (place(Items.NETHERRACK, guardrail2.up(-1), true)) return;
         if (shouldPlace) {
-            if (mc.world.isAir(targetPos2)) {
-                switchToItem(Items.NETHERRACK);
-                BlockUtils.place(targetPos2, InvUtils.findInHotbar(itemStack ->
-                        itemStack.getItem() == Items.NETHERRACK), false, 0, true, true);
-                return;
-            }
-
-            switchToItem(Items.BLUE_ICE);
-            BlockUtils.place(targetPos, InvUtils.findInHotbar(itemStack ->
-                    itemStack.getItem() == Items.BLUE_ICE), false, 0, true, true);
+            if (place(Items.NETHERRACK, targetPos2, false)) return;
+            place(Items.BLUE_ICE, targetPos, false);
         }
     }
 }

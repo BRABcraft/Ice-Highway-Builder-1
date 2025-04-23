@@ -10,6 +10,7 @@ import K_K_L_L.IceRail.addon.IceRail;
 import baritone.api.BaritoneAPI;
 import baritone.api.IBaritone;
 import baritone.api.pathing.goals.GoalBlock;
+import baritone.api.process.ICustomGoalProcess;
 import baritone.api.process.IElytraProcess;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.*;
@@ -193,6 +194,7 @@ public class BlueIceMiner extends Module {
             .defaultValue(true)
             .build()
     );
+
     @Override
     public void onActivate() {
         assert mc.world != null;
@@ -228,7 +230,11 @@ public class BlueIceMiner extends Module {
         firstValidShulker = -1;
         wasGathering = false;
         returnToSlot = false;
+
+        cancelBaritone();
+        error("cancelBaritone 235");
     }
+
     @Override
     public void onDeactivate() {
         mc.options.attackKey.setPressed(false);
@@ -242,15 +248,22 @@ public class BlueIceMiner extends Module {
         Module iceRailGatherItem = Modules.get().get("ice-rail-gather-item");
         if (iceRailGatherItem.isActive()) iceRailGatherItem.toggle();
         cancelBaritone();
+        error("cancelBaritone 250");
     }
+
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         tick++;
 
         // Validity checks
-        if (mc.player == null || mc.world == null) {return;}
+        if (mc.player == null || mc.world == null) {
+            return;
+        }
         if (!isActive()) return;
-        if (state == null || state.equals("idle")) {isPathing = false; return;}
+        if (state == null || state.equals("idle")) {
+            isPathing = false;
+            return;
+        }
 
         error(state);
         IceHighwayBuilder iceHighwayBuilder = Modules.get().get(IceHighwayBuilder.class);
@@ -284,12 +297,12 @@ public class BlueIceMiner extends Module {
         }
 
         //Hostile mob elimination methods
-        if (pathToTridentDrowned()) {
-            error("Moving towards a trident drowned");
-            return;
-        }
         if (killaura()) {
             error("killaura");
+            return;
+        }
+        if (!state.equals("flyToBlueIce") && pathToTridentDrowned()) {
+            error("Moving towards a trident drowned");
             return;
         }
         if (manageInventory()) {
@@ -339,6 +352,7 @@ public class BlueIceMiner extends Module {
             //backtrack to blue ice
         }
     }
+
     private boolean manageInventory() {
         assert mc.world != null;
         assert mc.player != null;
@@ -348,7 +362,6 @@ public class BlueIceMiner extends Module {
         mc.options.sneakKey.setPressed(false);
         mc.options.jumpKey.setPressed(false);
         mc.options.forwardKey.setPressed(false);
-        cancelBaritone();
 
         int blueIceSlots = 0;
         int blueIceTotal = 0;
@@ -363,7 +376,8 @@ public class BlueIceMiner extends Module {
                 if (itemStack.isEmpty()) {
                     if (firstEmptySlot == -1) firstEmptySlot = i;
                 } else {
-                    if (i > 8 && (firstBlueIceSlot == -1 || mc.player.getInventory().getStack(firstBlueIceSlot).getCount() < blueIceSlots)) firstBlueIceSlot = i;
+                    if (i > 8 && (firstBlueIceSlot == -1 || mc.player.getInventory().getStack(firstBlueIceSlot).getCount() < blueIceSlots))
+                        firstBlueIceSlot = i;
                 }
             }
             if (itemStack.getItem() instanceof BlockItem &&
@@ -377,13 +391,15 @@ public class BlueIceMiner extends Module {
                         if (firstValidShulker == -1) firstValidShulker = i;
                     }
                 }
-                if(found) {
+                if (found) {
                     remainingShulkers++;
                 }
             }
         }
 
         if (state.equals("dumpBlueIce")) {
+            cancelBaritone();
+            error("cancelBaritone 400");
             scanningWorld2 = true;
             if (!hasOpenedShulker) {
                 openShulker();
@@ -449,6 +465,8 @@ public class BlueIceMiner extends Module {
                 return false;
             }
             if (blueIceTotal == blueIceSlots * 64 || remainingShulkers == 0) {
+                cancelBaritone();
+                error("cancelBaritone 466");
                 if (remainingShulkers > 0) {
                     assert firstValidShulker != -1;
                     scanningWorld2 = true;
@@ -524,17 +542,20 @@ public class BlueIceMiner extends Module {
             } else {
                 scanningWorld2 = true;
                 if (firstEmptySlot != -1 && firstBlueIceSlot != -1) {
+                    cancelBaritone();
+                    error("cancelBaritone 542");
                     if (tick % 2 == 0) return true;
                     //spread firstBlueIceSlot to firstEmptySlot
                     int syncId = mc.player.playerScreenHandler.syncId;
+                    if (firstEmptySlot < 9) firstEmptySlot += 36;
                     if (returnToSlot) {
                         returnToSlot = false;
                         mc.interactionManager.clickSlot(syncId, firstBlueIceSlot, 0, SlotActionType.PICKUP, mc.player);
                         error("placed down cursor slot at " + firstBlueIceSlot);
                     } else if (mc.player.currentScreenHandler.getCursorStack().isEmpty()) {
                         returnToSlot = false;
-                        mc.interactionManager.clickSlot(syncId, firstBlueIceSlot, 0, SlotActionType.PICKUP, mc.player);
-                        error("picked up blue ice slot at " + firstBlueIceSlot);
+                        mc.interactionManager.clickSlot(syncId, firstBlueIceSlot, 1, SlotActionType.PICKUP, mc.player);
+                        error("picked up half of blue ice slot at " + firstBlueIceSlot);
                     } else {
                         returnToSlot = true;
                         mc.interactionManager.clickSlot(syncId, firstEmptySlot, 1, SlotActionType.PICKUP, mc.player);
@@ -548,11 +569,12 @@ public class BlueIceMiner extends Module {
         return false;
     }
 
-    private boolean isTargetMob(LivingEntity entity){
+    private boolean isTargetMob(LivingEntity entity) {
         if (entity instanceof EndermanEntity enderman && !enderman.isAngry()) return false;
         if (entity instanceof PolarBearEntity) return true;
         return (entity instanceof HostileEntity);
     }
+
     private boolean killaura() {
         assert mc.world != null;
         assert mc.player != null;
@@ -606,14 +628,15 @@ public class BlueIceMiner extends Module {
         assert mc.player != null;
         List<LivingEntity> targets = mc.world.getEntitiesByClass(
                 LivingEntity.class,
-                mc.player.getBoundingBox().expand(24),
+                mc.player.getBoundingBox().expand(20),
                 e -> e instanceof ZombieEntity);
         if (targets == null || targets.isEmpty()) {
             return false;
         }
         LivingEntity target = null;
         for (LivingEntity entity : targets) {
-            if (entity.getMainHandStack().getItem() == Items.TRIDENT) {
+            Item heldItem = entity.getMainHandStack().getItem();
+            if (heldItem == Items.TRIDENT || heldItem == Items.BLUE_ICE) {
                 target = entity;
                 break;
             }
@@ -637,11 +660,11 @@ public class BlueIceMiner extends Module {
         assert mc.world != null;
         assert mc.player != null;
         BlockPos pos = mc.player.getBlockPos();
-        List<BlockPos> targetBlocks = switch(mc.player.getHorizontalFacing()) {
-            case EAST -> Arrays.asList(pos.add(1,0,0), pos.add(1,1,0));
-            case WEST -> Arrays.asList(pos.add(-1,0,0), pos.add(-1,1,0));
-            case NORTH -> Arrays.asList(pos.add(0,0,-1), pos.add(0,1,-1));
-            case SOUTH -> Arrays.asList(pos.add(0,0,1), pos.add(0,1,1));
+        List<BlockPos> targetBlocks = switch (mc.player.getHorizontalFacing()) {
+            case EAST -> Arrays.asList(pos.add(1, 0, 0), pos.add(1, 1, 0));
+            case WEST -> Arrays.asList(pos.add(-1, 0, 0), pos.add(-1, 1, 0));
+            case NORTH -> Arrays.asList(pos.add(0, 0, -1), pos.add(0, 1, -1));
+            case SOUTH -> Arrays.asList(pos.add(0, 0, 1), pos.add(0, 1, 1));
             case DOWN -> Collections.singletonList(pos.add(0, -1, 0));
             case UP -> Collections.singletonList(pos.add(0, 1, 0));
         };
@@ -652,6 +675,7 @@ public class BlueIceMiner extends Module {
                 return true;
             }
         }
+        swapToPickaxe();
         mc.options.attackKey.setPressed(false);
         return false;
     }
@@ -682,7 +706,7 @@ public class BlueIceMiner extends Module {
         if (type == 0 || type > 2) {
             if (item == Items.OBSIDIAN) {
                 return (stack.getItem() == item && stack.getCount() > 15);
-            } else if (item == Items.ENDER_CHEST){
+            } else if (item == Items.ENDER_CHEST) {
                 return (stack.getItem() == item && stack.getCount() > 1);
             } else {
                 return (stack.getItem() == item);
@@ -729,12 +753,14 @@ public class BlueIceMiner extends Module {
                 if (bestSlot == -1) {
                     bestSlot = i;
                 }
-                foundCount ++;
+                foundCount++;
             }
         }
         if (bestSlot != -1) {
             if (type != 2) {
-                if (type < 2) {InvUtils.quickSwap().fromId(slot).toId(bestSlot);}
+                if (type < 2) {
+                    InvUtils.quickSwap().fromId(slot).toId(bestSlot);
+                }
                 return true;
             }
         }
@@ -822,7 +848,7 @@ public class BlueIceMiner extends Module {
         iceBergDistances = new ArrayList<>();
         for (BlockPos foundIce : locations) {
             smallestDistance = Double.MAX_VALUE;
-            for (int i = 0; i < groups.size(); i+=2) {
+            for (int i = 0; i < groups.size(); i += 2) {
                 BlockPos block2 = (BlockPos) groups.get(i);
                 xDiff = foundIce.getX() - block2.getX();
                 zDiff = foundIce.getZ() - block2.getZ();
@@ -843,9 +869,9 @@ public class BlueIceMiner extends Module {
             }
         }
         error("found groups at line 476: " + groups);
-        for (int i=0; i < groups.size(); i+=2){
-            if ((int)groups.get(i+1) > groupsizeThreshold.get() ||
-                    (PlayerUtils.isWithin(((BlockPos) groups.get(i)),8.0) && ((int) groups.get(i+1)) > 10)) {
+        for (int i = 0; i < groups.size(); i += 2) {
+            if ((int) groups.get(i + 1) > groupsizeThreshold.get() ||
+                    (PlayerUtils.isWithin(((BlockPos) groups.get(i)), 8.0) && ((int) groups.get(i + 1)) > 10)) {
                 validGroups.add(i);
             }
         }
@@ -853,31 +879,32 @@ public class BlueIceMiner extends Module {
         assert mc.player != null;
         for (int i : validGroups) {
             BlockPos block1 = (BlockPos) groups.get(i);
-            double xSquared = Math.pow(block1.getX()-mc.player.getX(), 2);
-            double zSquared = Math.pow(block1.getZ()-mc.player.getZ(), 2);
-            iceBergDistances.add(Math.sqrt(xSquared+zSquared));
+            double xSquared = Math.pow(block1.getX() - mc.player.getX(), 2);
+            double zSquared = Math.pow(block1.getZ() - mc.player.getZ(), 2);
+            iceBergDistances.add(Math.sqrt(xSquared + zSquared));
             temporary.add(block1);
-            temporary.add(groups.get(i+1));
+            temporary.add(groups.get(i + 1));
         }
         groups = temporary;
     }
 
-    public BlockPos nearestGroupCoords(boolean updateCurrentIceberg){
+    public BlockPos nearestGroupCoords(boolean updateCurrentIceberg) {
         assert mc.player != null;
         if (groups.isEmpty()) return mc.player.getBlockPos();
         int j = 0;
         double min = Double.MAX_VALUE;
-        for (int i = 0; i<iceBergDistances.size(); i++) {
+        for (int i = 0; i < iceBergDistances.size(); i++) {
             if (iceBergDistances.get(i) < min) {
                 j = i;
                 min = iceBergDistances.get(i);
             }
         }
         if (updateCurrentIceberg) {
-            currentIceberg = j*2;
+            currentIceberg = j * 2;
         }
-        return (BlockPos) groups.get(j*2);
+        return (BlockPos) groups.get(j * 2);
     }
+
     private void disableAllModules() {
         String[] modulesToDisable = {
                 "ice-rail-gather-item",
@@ -895,12 +922,14 @@ public class BlueIceMiner extends Module {
             }
         }
     }
+
     public static void packetMine(BlockPos block) {
         MinecraftClient mc = MinecraftClient.getInstance();
         lookAtBlock(block);
         mc.options.attackKey.setPressed(true);
     }
-    public static boolean isInColdBiome(){
+
+    public static boolean isInColdBiome() {
         MinecraftClient mc = MinecraftClient.getInstance();
         assert mc.player != null;
         assert mc.world != null;
@@ -915,6 +944,7 @@ public class BlueIceMiner extends Module {
                 biome.getKey().equals(Optional.of(BiomeKeys.SNOWY_TAIGA)) ||
                 biome.getKey().equals(Optional.of(BiomeKeys.TAIGA));
     }
+
     public ArrayList<BlockPos> getBlueIceInRange() {
         MinecraftClient mc = MinecraftClient.getInstance();
         ArrayList<BlockPos> blockPosList = new ArrayList<>();
@@ -941,15 +971,16 @@ public class BlueIceMiner extends Module {
         }
         return blockPosList;
     }
+
     private boolean mineObstructingBlocks() {
         assert mc.player != null;
         assert mc.world != null;
         BlockPos playerPos = mc.player.getBlockPos();
         int sx = playerPos.getX();
         int sz = playerPos.getZ();
-        for(int y = slice_maxY; y >= slice_minY; y--) {
-            for(int x = sx - 2; x <= sx + 2; x++) {
-                for(int z = sz - 2; z <= sz + 2; z++) {
+        for (int y = slice_maxY; y >= slice_minY; y--) {
+            for (int x = sx - 2; x <= sx + 2; x++) {
+                for (int z = sz - 2; z <= sz + 2; z++) {
                     BlockPos blockPos = new BlockPos(x, y, z);
                     Block block = mc.world.getBlockState(blockPos).getBlock();
                     List<Block> obstructionBlocks = Arrays.asList(
@@ -963,6 +994,7 @@ public class BlueIceMiner extends Module {
                     );
                     if (PlayerUtils.isWithin(blockPos, 2) && obstructionBlocks.contains(block)) {
                         lookAtBlock(blockPos);
+                        swapToPickaxe();
                         mc.options.attackKey.setPressed(true);
                         return true;
                     }
@@ -979,9 +1011,9 @@ public class BlueIceMiner extends Module {
         int sx = playerPos.getX();
         int sz = playerPos.getZ();
         ArrayList<BlockPos> slice = new ArrayList<>();
-        for(int y = slice_maxY; y >= slice_minY; y--) {
-            for(int x = sx - 7; x <= sx + 7; x++) {
-                for(int z = sz - 7; z <= sz + 7; z++) {
+        for (int y = slice_maxY; y >= slice_minY; y--) {
+            for (int x = sx - 7; x <= sx + 7; x++) {
+                for (int z = sz - 7; z <= sz + 7; z++) {
                     BlockPos block = new BlockPos(x, y, z);
                     if (mc.world.getBlockState(block).getBlock() == Blocks.BLUE_ICE) {
                         slice.add(block);
@@ -999,10 +1031,11 @@ public class BlueIceMiner extends Module {
 
         int j = 200;
         while (mc.world.getBlockState(mc.player.getBlockPos().withY(j)).isAir()) {
-            j --;
+            j--;
         }
         return j;
     }
+
     public static int getEchestSlot() {
         MinecraftClient mc = MinecraftClient.getInstance();
         int echestSlot = -1;
@@ -1052,11 +1085,12 @@ public class BlueIceMiner extends Module {
         assert mc.player != null;
         assert mc.world != null;
 
-        if (getEchestSlot() != -1) {echestSlot = getEchestSlot();}
+        if (getEchestSlot() != -1) {
+            echestSlot = getEchestSlot();
+        }
 
         if (!mc.player.getBlockPos().equals(restockingStartPosition)) {
-            BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(new GoalBlock(restockingStartPosition));
-            resumeBaritone();
+            createCustomGoalProcess(restockingStartPosition);
             return;
         }
         if (mc.world.getBlockState(shulkerBlockPos).getBlock() != Blocks.ENDER_CHEST) {
@@ -1078,7 +1112,7 @@ public class BlueIceMiner extends Module {
                     }
                 }
             }
-            InvUtils.swap(swapSlot,false);
+            InvUtils.swap(swapSlot, false);
             assert mc.getNetworkHandler() != null;
             lookAtBlock(shulkerBlockPos);
             packetMine(shulkerBlockPos);
@@ -1125,7 +1159,7 @@ public class BlueIceMiner extends Module {
             toggle();
             return;
 
-        //If there is an elytra in the inventory:
+            //If there is an elytra in the inventory:
         } else {
             boolean test = false;
             for (int i = 0; i < mc.player.getInventory().size(); i++) {
@@ -1135,7 +1169,9 @@ public class BlueIceMiner extends Module {
                     break;
                 }
             }
-            if (mc.player.getEquippedStack(EquipmentSlot.CHEST).getItem() == Items.ELYTRA) {test = true;}
+            if (mc.player.getEquippedStack(EquipmentSlot.CHEST).getItem() == Items.ELYTRA) {
+                test = true;
+            }
 
             //Equip the elytra
             if (test) {
@@ -1162,7 +1198,7 @@ public class BlueIceMiner extends Module {
             toggle();
             return;
 
-        //If there are enough fireworks:
+            //If there are enough fireworks:
         } else {
 
             //Ensure fireworks are in hotbar
@@ -1176,7 +1212,8 @@ public class BlueIceMiner extends Module {
             }
             if (slot > 8) {
                 InvUtils.quickSwap().fromId(toolSlot).toId(slot);
-                return;}
+                return;
+            }
         }
 
         //Search render distance for nether a portal, only search for one tick to avoid lag.
@@ -1216,8 +1253,7 @@ public class BlueIceMiner extends Module {
 
                     //If the player isn't at the highway yet, path to it.
                     if (test1) {
-                        BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(new GoalBlock(goal));
-                        resumeBaritone();
+                        createCustomGoalProcess(goal);
                         error(String.valueOf(goal.withY(mc.player.getBlockY())));
                         isPathing = true;
                     } else {
@@ -1229,16 +1265,16 @@ public class BlueIceMiner extends Module {
                         scanningWorld = tick % 200 == 0;
                     }
 
-                //If player can't build a portal but can't search on highway, or player can build portals but has no non-silk pickaxes and no obsidian, disable.
+                    //If player can't build a portal but can't search on highway, or player can build portals but has no non-silk pickaxes and no obsidian, disable.
                 } else {
                     error("No obsidian or non-silk touch pickaxe in inventory and searchOnHighway is disabled.");
                     disableAllModules();
                     toggle();
                 }
 
-            //If player has a non-silk pickaxe, retrieve an echest
+                //If player has a non-silk pickaxe, retrieve an echest
             } else {
-                if(search(Items.ENDER_CHEST, 5, 0)) {
+                if (search(Items.ENDER_CHEST, 5, 0)) {
 
                     //If retrieving succeeds, start mining echests
                     getRestockingStartPos();
@@ -1314,7 +1350,7 @@ public class BlueIceMiner extends Module {
                     case EAST, WEST -> new BlockPos(mc.player.getBlockX(), 114, goalOff);
                     default -> new BlockPos(0, 0, 0); // This shouldn't happen.
                 };
-                BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(new GoalBlock(goal));
+                createCustomGoalProcess(goal);
                 isPathing = true;
             } else {
                 mc.options.jumpKey.setPressed(true);
@@ -1335,11 +1371,12 @@ public class BlueIceMiner extends Module {
                     case EAST, WEST -> {
                         portalOriginBlock = mc.player.getBlockPos().south(-1);
                     }
-                }                    ;
+                }
+                ;
             }
             error(String.valueOf(portalOriginBlock));
             ArrayList<Integer> offset = new ArrayList<>(Arrays.asList(
-                    0,-1, 1,-1, 2,-1, 3,-1,
+                    0, -1, 1, -1, 2, -1, 3, -1,
                     0, 0, 1, 0, 2, 0, 3, 0,
                     0, 1, 1, 1, 2, 1, 3, 1,
                     0, 2, 1, 2, 2, 2, 3, 2,
@@ -1351,12 +1388,13 @@ public class BlueIceMiner extends Module {
             for (int i = 0; i < 20; i++) {
                 switch (getPlayerDirection()) {
                     case NORTH, SOUTH -> {
-                        portalBlocks.add(portalOriginBlock.south(offset.get(i*2)).up(offset.get(i*2 + 1)));
+                        portalBlocks.add(portalOriginBlock.south(offset.get(i * 2)).up(offset.get(i * 2 + 1)));
                     }
                     case EAST, WEST -> {
-                        portalBlocks.add(portalOriginBlock.east(offset.get(i*2)).up(offset.get(i*2 + 1)));
+                        portalBlocks.add(portalOriginBlock.east(offset.get(i * 2)).up(offset.get(i * 2 + 1)));
                     }
-                };
+                }
+                ;
             }
         }
         buildTimer++;
@@ -1364,13 +1402,13 @@ public class BlueIceMiner extends Module {
         int ticksPerBlock = (inOverworld ? 20 : 10);
         if (buildTimer < ticksPerBlock * 20) {
             isPathing = true;
-            BlockPos target = portalBlocks.get((buildTimer)/ticksPerBlock);
-            boolean placeObby = (portalObby.get((buildTimer)/ticksPerBlock)==1);
+            BlockPos target = portalBlocks.get((buildTimer) / ticksPerBlock);
+            boolean placeObby = (portalObby.get((buildTimer) / ticksPerBlock) == 1);
             createPortal(target, placeObby);
         } else {
             if (buildTimer < ticksPerBlock * 28) {
-                BlockPos target = portalBlocks.get((buildTimer-ticksPerBlock * 20) / ((int) (ticksPerBlock * 0.4)));
-                boolean placeObby = (portalObby.get((buildTimer-ticksPerBlock * 20) / ((int) (ticksPerBlock * 0.4)))==1);
+                BlockPos target = portalBlocks.get((buildTimer - ticksPerBlock * 20) / ((int) (ticksPerBlock * 0.4)));
+                boolean placeObby = (portalObby.get((buildTimer - ticksPerBlock * 20) / ((int) (ticksPerBlock * 0.4))) == 1);
                 createPortal(target, placeObby);
             } else {
                 if (mc.world.getBlockState(portalBlocks.get(2).up(1)).getBlock() != Blocks.NETHER_PORTAL) {
@@ -1386,7 +1424,8 @@ public class BlueIceMiner extends Module {
                         airPlace(portalBlocks.get(2), switch (getPlayerDirection()) {
                             case NORTH, SOUTH -> Direction.WEST;
                             case EAST, WEST -> Direction.NORTH;
-                            default -> null;});
+                            default -> null;
+                        });
                     }
                 } else {
                     //portal finished
@@ -1451,7 +1490,7 @@ public class BlueIceMiner extends Module {
             }
         }
 
-        if (countDroppedBlueIce(mc.player,10) > 0) {
+        if (countDroppedBlueIce(mc.player, 10) > 0) {
             gatherBlueIce();
             return;
         }
@@ -1464,13 +1503,13 @@ public class BlueIceMiner extends Module {
             landCoords = nearestCoord.withY(getMaxY(nearestCoord));
 
             //If player is above the closest iceberg, land.
-            if (Math.abs(mc.player.getX()-landCoords.getX()) < 1.0 && Math.abs(mc.player.getZ()-landCoords.getZ()) < 1.0) {
+            if (Math.abs(mc.player.getX() - landCoords.getX()) < 1.0 && Math.abs(mc.player.getZ() - landCoords.getZ()) < 1.0) {
                 state = "land";
                 vertex = landCoords.withY(mc.player.getBlockY());
                 scanningWorld = true;
                 returnToState = "goToBlueIce";
 
-            //Otherwise, fly to the iceberg.
+                //Otherwise, fly to the iceberg.
             } else {
                 //If the player is too low, fly up.
                 if (mc.player.getY() < frozenOceanCruiseAltitude.get()) {
@@ -1478,11 +1517,10 @@ public class BlueIceMiner extends Module {
                     //If the player doesn't have headspace to jump, path up.
                     BlockPos pos = mc.player.getBlockPos();
                     boolean canJump = mc.world.getBlockState(pos.up(2)).isAir();
-                    if (!mc.player.isFallFlying() && !canJump) {
+                    error("head up 2: " + mc.world.getBlockState(pos.up(2)).getBlock());
+                    if (!canJump) {
                         BlockPos goal = pos.withY(getMaxY(pos));
-                        isPathing = true;
-                        BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(new GoalBlock(goal));
-                        resumeBaritone();
+                        createCustomGoalProcess(goal);
                         return;
                     }
 
@@ -1497,12 +1535,12 @@ public class BlueIceMiner extends Module {
                             mc.options.useKey.setPressed(false);
                         }
                     } else {
-                        setKeyPressed(mc.options.jumpKey, tick % 4 < 2);
+                        setKeyPressed(mc.options.jumpKey, mc.player.getY() < 62 || tick % 4 < 2);
                     }
 
-                //If the player is high enough, pitch down and look towards the iceberg.
+                    //If the player is high enough, pitch down and look towards the iceberg.
                 } else {
-                    float[] angles = PlayerUtils.calculateAngle(new Vec3d(landCoords.getX(),landCoords.getY(),landCoords.getZ()));
+                    float[] angles = PlayerUtils.calculateAngle(new Vec3d(landCoords.getX(), landCoords.getY(), landCoords.getZ()));
                     mc.player.setYaw(angles[0]);
                     mc.player.setPitch(15);
                 }
@@ -1524,8 +1562,7 @@ public class BlueIceMiner extends Module {
                 goal = pos.east(-2).withY(getMaxY(pos.south(-2)));
             }
             isPathing = true;
-            BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(new GoalBlock(goal));
-            resumeBaritone();
+            createCustomGoalProcess(goal);
             return;
         }
 
@@ -1542,15 +1579,16 @@ public class BlueIceMiner extends Module {
             InvUtils.swap(fireworkSlot, false);
 
             //Use fireworks and spam spacebar. Spam fireworks when close to ground.
-            if (tick % (mc.player.getY() < getMaxY(mc.player.getBlockPos())+5 ? 20 : 80) == 0) {
+            if (tick % (mc.player.getY() < getMaxY(mc.player.getBlockPos()) + 5 ? 20 : 80) == 0) {
                 mc.player.setPitch((float) -45.0);
                 if (mc.player.isFallFlying()) {
 
                     //[GLITCHED] If something is blocking player (like an ice block), mine it.
                     if (getLookingAtBlock() != Blocks.AIR) {
+                        swapToPickaxe();
                         mc.options.attackKey.setPressed(true);
 
-                    //Otherwise, use fireworks.
+                        //Otherwise, use fireworks.
                     } else {
                         Utils.rightClick();
                         mc.options.attackKey.setPressed(false);
@@ -1560,13 +1598,14 @@ public class BlueIceMiner extends Module {
                 setKeyPressed(mc.options.jumpKey, tick % 4 < 2);
             }
 
-        //When player has reached Fly Height:
+            //When player has reached Fly Height:
         } else {
             //When player has reached peak height, begin descending.
-            double velocitySquared = Math.pow(mc.player.getVelocity().x,2)+Math.pow(mc.player.getVelocity().y,2)+Math.pow(mc.player.getVelocity().z,2);
+            double velocitySquared = Math.pow(mc.player.getVelocity().x, 2) + Math.pow(mc.player.getVelocity().y, 2) + Math.pow(mc.player.getVelocity().z, 2);
             if (velocitySquared < 0.25) {
                 mc.player.setPitch((float) 15.0);
-                setKeyPressed(mc.options.jumpKey, false);}
+                setKeyPressed(mc.options.jumpKey, false);
+            }
         }
 
         //If player has not found a frozen ocean yet:
@@ -1574,11 +1613,11 @@ public class BlueIceMiner extends Module {
 
             //Determine direction to search for frozen ocean.
             if (getPlayerDirection() == null) return;
-            float yaw = switch(getPlayerDirection()) {
-                case NORTH -> (float)90;
-                case SOUTH -> (float)-90;
-                case EAST -> (float)180;
-                case WEST -> (float)0;
+            float yaw = switch (getPlayerDirection()) {
+                case NORTH -> (float) 90;
+                case SOUTH -> (float) -90;
+                case EAST -> (float) 180;
+                case WEST -> (float) 0;
                 default -> 0;
             };
 
@@ -1587,39 +1626,39 @@ public class BlueIceMiner extends Module {
                 if (vertex == null) {
                     vertex = mc.player.getBlockPos();
                 }
-                double squaredDistance = Math.pow(vertex.getX()-mc.player.getX(), 2)+Math.pow(vertex.getZ()-mc.player.getZ(), 2);
+                double squaredDistance = Math.pow(vertex.getX() - mc.player.getX(), 2) + Math.pow(vertex.getZ() - mc.player.getZ(), 2);
                 if (leg == 0) {
                     leg = 1;
                 }
                 if (leg == 1) {
-                    mc.player.setYaw(yaw-45);
+                    mc.player.setYaw(yaw - 45);
                     if (squaredDistance > 9000000) {
                         vertex = mc.player.getBlockPos();
                         leg = 2;
                     }
                 }
                 if (leg == 2) {
-                    mc.player.setYaw(yaw+90);
+                    mc.player.setYaw(yaw + 90);
                     if (squaredDistance > 18000000) {
                         vertex = mc.player.getBlockPos();
                         leg = 3;
                     }
                 }
                 if (leg == 3) {
-                    mc.player.setYaw(yaw-135);
+                    mc.player.setYaw(yaw - 135);
                     if (squaredDistance > 9000000) {
                         vertex = mc.player.getBlockPos();
                         leg = 0;
                     }
                 }
 
-            //Before finding a cold biome, fly in a straight line.
+                //Before finding a cold biome, fly in a straight line.
             } else {
                 mc.player.setYaw(yaw);
                 vertex = mc.player.getBlockPos();
             }
 
-        //If player has already found a frozen ocean (and is searching for blue icebergs):
+            //If player has already found a frozen ocean (and is searching for blue icebergs):
         } else {
 
             //[NEEDS TESTING] If player has left the frozen ocean, look randomly every 3 seconds until it is back.
@@ -1628,13 +1667,14 @@ public class BlueIceMiner extends Module {
             }
         }
     }
+
     private void handleLand() {
         assert mc.player != null;
         assert mc.world != null;
 
         isPathing = true;
         if (mc.player.isFallFlying() && mc.player.getBlockY() > 60) {
-            double xDiff = vertex.getX()-mc.player.getX();
+            double xDiff = vertex.getX() - mc.player.getX();
             if (xDiff > 1) {
                 mc.player.setYaw(-90);
             } else if (xDiff < -1) {
@@ -1665,6 +1705,7 @@ public class BlueIceMiner extends Module {
         if (iceRailGatherItem.isActive()) {
             iceRailGatherItem.toggle();
         }
+        error("cancelBaritone");
     }
 
     private void lookInRandomDirection() {
@@ -1688,12 +1729,12 @@ public class BlueIceMiner extends Module {
         if (range.isEmpty()) {
 
             //If the current iceberg no longer exists, fly to a new one.
-            if (groups.isEmpty() || currentIceberg >= groups.size() - 1 || (int)groups.get(currentIceberg+1) == 0) {
+            if (groups.isEmpty() || currentIceberg >= groups.size() - 1 || (int) groups.get(currentIceberg + 1) == 0) {
                 error("Failed to go to blue ice because current iceberg doesn't exist, flyToBlueIce");
                 lookInRandomDirection();
                 state = "flyToBlueIce";
 
-            //If the current iceberg exists, path to it.
+                //If the current iceberg exists, path to it.
             } else {
                 if (scanningWorld) {
                     getBlockGroups(Blocks.BLUE_ICE);
@@ -1703,17 +1744,25 @@ public class BlueIceMiner extends Module {
                 goal = (slice_minY == 0 ? goal : goal.withY(slice_minY));
                 if (PlayerUtils.isWithin(goal, 2.0)) {
                     cancelBaritone();
+                    error("cancelBaritone 1746");
                 } else {
-                    BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(new GoalBlock(goal));
-                    resumeBaritone();
+                    createCustomGoalProcess(goal);
                 }
             }
 
-        //Once there is blue ice in range, begin mining.
+            //Once there is blue ice in range, begin mining.
         } else {
             wasGathering = false;
             wasBreathing = false;
             state = "mineBlueIceInRange";
+        }
+    }
+
+    private void createCustomGoalProcess(BlockPos goal) {
+        ICustomGoalProcess customGoalProcess = BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess();
+        if (!customGoalProcess.isActive() || customGoalProcess.getGoal() == null) {
+            error("customGoalProcess.getGoal(): " + customGoalProcess.getGoal() + " real goal: " + goal);
+            customGoalProcess.setGoalAndPath(new GoalBlock(goal));
         }
     }
 
@@ -1751,17 +1800,20 @@ public class BlueIceMiner extends Module {
     }
 
     private void gatherBlueIce() {
+        assert mc.player != null;
         getItemInInventory(Items.DIAMOND_PICKAXE, toolSlot);
         mc.options.attackKey.setPressed(true);
         mc.options.sneakKey.setPressed(false);
         mc.options.forwardKey.setPressed(true);
-        mc.options.jumpKey.setPressed(false);
+        mc.options.jumpKey.setPressed(mc.player.getY() < 60);
         if (!isGatheringItems()) {
             IceRailGatherItem(Items.BLUE_ICE);
         }
     }
 
     private void centerPlayer() {
+        if (tick % 3 > 0) return;
+
         assert mc.player != null;
         mc.player.setYaw(-90.0f);
         GameOptions ops = mc.options;
@@ -1810,6 +1862,7 @@ public class BlueIceMiner extends Module {
             return;
         }
         cancelBaritone();
+        error("cancelBaritone 1865");
 
         boolean walkForward = true;
 
@@ -1818,7 +1871,7 @@ public class BlueIceMiner extends Module {
         if (range.isEmpty() || wasTowering) {
             if (slice.isEmpty() && !wasTowering && !(mc.player.getY() < slice_minY)) {
                 if (tick % 80 == 0) getBlockGroups(Blocks.BLUE_ICE);
-                if (groups.size() > currentIceberg && (int) groups.get(currentIceberg + 1) > 0 && slice_minY > 50) {
+                if (groups.size() > currentIceberg && (int) groups.get(currentIceberg + 1) > 0 && slice_minY > 46) {
                     error("Decreasing slice_minY and slice_maxY");
                     slice_minY -= sliceHeight.get();
                     slice_maxY -= sliceHeight.get();
@@ -1833,6 +1886,7 @@ public class BlueIceMiner extends Module {
                 }
             } else {
                 error("walking forwards to get more blue ice");
+                swapToPickaxe();
                 if (mineObstructingBlocks()) {
                     mc.options.jumpKey.setPressed(false);
                     return;
@@ -1900,8 +1954,7 @@ public class BlueIceMiner extends Module {
             }
 
             //Controls
-            getItemInInventory(Items.DIAMOND_PICKAXE, toolSlot);
-            InvUtils.swap(toolSlot, false);
+            swapToPickaxe();
             if (isOverBlueIce) {
                 mc.options.jumpKey.setPressed(jump);
             } else if (isUnderWater) {
@@ -1909,10 +1962,15 @@ public class BlueIceMiner extends Module {
             }
             mc.options.sneakKey.setPressed(!jump);
             mc.options.forwardKey.setPressed(walkForward);
-            boolean attack = (isOverBlueIce ? (mineDuration % 30 < 25) : (mineDuration % 150 < 125));
+            boolean attack = (isOverBlueIce ? (mineDuration % 35 < 30) : (mineDuration % 150 < 125));
             mc.options.attackKey.setPressed(attack);
             mc.options.backKey.setPressed(false);
         }
+    }
+
+    private void swapToPickaxe() {
+        getItemInInventory(Items.DIAMOND_PICKAXE, toolSlot);
+        InvUtils.swap(toolSlot, false);
     }
 
     private void disablemodules() {
@@ -2047,8 +2105,7 @@ public class BlueIceMiner extends Module {
                 isPause = true;
                 return;
             }
-            BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(new GoalBlock(restockingStartPosition));
-            resumeBaritone();
+            createCustomGoalProcess(restockingStartPosition);
         } else {
             isPause = false;
         }

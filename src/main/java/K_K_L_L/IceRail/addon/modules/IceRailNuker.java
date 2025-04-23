@@ -23,11 +23,9 @@ import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.item.Items;
-import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
-import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import K_K_L_L.IceRail.addon.IceRail;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -35,7 +33,6 @@ import java.util.List;
 
 import static K_K_L_L.IceRail.addon.Utils.switchToBestTool;
 import static K_K_L_L.IceRail.addon.modules.IceHighwayBuilder.*;
-import static K_K_L_L.IceRail.addon.modules.IceHighwayBuilder.playerZ;
 import static K_K_L_L.IceRail.addon.modules.IceRailAutoEat.getIsEating;
 
 public class IceRailNuker extends Module {
@@ -44,12 +41,11 @@ public class IceRailNuker extends Module {
     private final SettingGroup sgRender = settings.createGroup("Render");
     private final MinecraftClient mc = MinecraftClient.getInstance();
     static boolean isBreaking;
+    static boolean isBreakingHardBlock;
 
     IceHighwayBuilder iceHighwayBuilder = Modules.get().get(IceHighwayBuilder.class);
     Setting<Integer> delay = iceHighwayBuilder.nukerDelay;
     Setting<Integer> maxBlocksPerTick = iceHighwayBuilder.nukerMaxBlocksPerTick;
-    Setting<Boolean> swingHand = iceHighwayBuilder.nukerSwingHand;
-    Setting<Boolean> packetMine = iceHighwayBuilder.nukerPacketMine;
     Setting<Boolean> rotate = iceHighwayBuilder.nukerRotate;
     Setting<IceRailNuker.ListMode> listMode = iceHighwayBuilder.nukerListMode;
     Setting<List<Block>> blacklist = iceHighwayBuilder.nukerBlacklist;
@@ -68,9 +64,16 @@ public class IceRailNuker extends Module {
     public static boolean getIsBreaking() {
         return isBreaking;
     }
+    public static boolean getIsBreakingHardBlock() {
+        return isBreaking && isBreakingHardBlock;
+    }
 
     public static void setIsBreaking(boolean value) {
         isBreaking = value;
+    }
+
+    public static void setIsBreakingHardBlock(boolean value) {
+        isBreakingHardBlock = value;
     }
 
 
@@ -140,6 +143,10 @@ public class IceRailNuker extends Module {
 
         if (mc.player == null) return;
 
+        if (!isBreaking) mc.options.attackKey.setPressed(false);
+
+        if (getPlayerDirection() == null) return;
+
         BlockPos pos1 = getRegion1Start();
         BlockPos pos2 = getRegion1End();
 
@@ -152,8 +159,10 @@ public class IceRailNuker extends Module {
             if (!isInAnyRegion(blockPos)) return;
             if (!BlockUtils.canBreak(blockPos, blockState)) return;
             if (!(blockState.getBlock() == Blocks.BLUE_ICE && blockPos.getY() != 115)) {
-                if (listMode.get() == ListMode.Whitelist && !whitelist.get().contains(blockState.getBlock())) return;
-                if (listMode.get() == ListMode.Blacklist && blacklist.get().contains(blockState.getBlock())) return;
+                if (!isBlueIceBlock(blockPos)) {
+                    if (listMode.get() == ListMode.Whitelist && !whitelist.get().contains(blockState.getBlock()))return;
+                    if (listMode.get() == ListMode.Blacklist && blacklist.get().contains(blockState.getBlock())) return;
+                }
             }
             blocks.add(blockPos.toImmutable());
         });
@@ -164,7 +173,17 @@ public class IceRailNuker extends Module {
         });
     }
 
+    private boolean isBlueIceBlock(BlockPos block) {
+        assert mc.world != null;
+        return switch (getPlayerDirection()) {
+            case NORTH, SOUTH -> block.getZ() % 2 == 0 && block.getX() == -200;
+            case EAST, WEST -> block.getX() % 2 == 0 && block.getZ() == -200;
+            default -> false;
+        } && block.getY() == 115 && mc.world.getBlockState(block).getBlock() != Blocks.BLUE_ICE;
+    }
+
     private void processBlocks() {
+        assert mc.world != null;
         if (blocks.isEmpty()) {
             if (noBlockTimer++ >= delay.get()) {
                 firstBlock = true;
@@ -188,7 +207,7 @@ public class IceRailNuker extends Module {
             if (count >= 4 && block.getY() > 115) break;
 
             boolean canInstaMine = BlockUtils.canInstaBreak(block);
-
+            mc.options.attackKey.setPressed(!mc.world.isAir(block));
             if (rotate.get()) {
                 Rotations.rotate(Rotations.getYaw(block), Rotations.getPitch(block), () -> breakBlock(block));
             } else {
@@ -201,7 +220,7 @@ public class IceRailNuker extends Module {
 
             lastBlockPos.set(block);
             count++;
-            if (!canInstaMine && !packetMine.get()) break;
+            if (!canInstaMine) break;
         }
 
         firstBlock = false;
@@ -209,17 +228,16 @@ public class IceRailNuker extends Module {
     }
 
     private void breakBlock(BlockPos blockPos) {
-        if (blockPos == null || mc.world.getBlockState(blockPos).getBlock() == Blocks.AIR) return;
+        if (blockPos == null) return;
         switchToBestTool(blockPos);
+        assert mc.world != null;
+        setIsBreakingHardBlock(mc.world.getBlockState(blockPos).getBlock() != Blocks.NETHERRACK);
         setIsBreaking(true);
-
-        if (packetMine.get()) {
-            mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK, blockPos, BlockUtils.getDirection(blockPos)));
-            if (swingHand.get()) mc.player.swingHand(Hand.MAIN_HAND);
-            mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK, blockPos, BlockUtils.getDirection(blockPos)));
-        } else {
-            BlockUtils.breakBlock(blockPos, swingHand.get());
-        }
+        assert mc.world != null;
+        if (mc.world.isAir(blockPos)) return;
+        lookAtBlock(blockPos);
+        error("nuker looked at block: " + blockPos);
+        assert mc.world != null;
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -230,6 +248,11 @@ public class IceRailNuker extends Module {
     public enum ListMode {
         Whitelist,
         Blacklist
+    }
+
+    @Override
+    public void onDeactivate() {
+        mc.options.attackKey.setPressed(false);
     }
 }
  

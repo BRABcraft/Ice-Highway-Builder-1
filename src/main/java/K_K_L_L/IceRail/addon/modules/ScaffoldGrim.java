@@ -84,7 +84,6 @@ public class ScaffoldGrim extends Module {
         if (tickCounter % 4 != 0) return;
         if (!isActive()) return;
         playerDirection = mc.player.getHorizontalFacing();
-        error("scaffoldGrim activated");
         FindItemResult item = null;
 
         // Find a block in the player's inventory

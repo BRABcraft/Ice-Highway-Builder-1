@@ -38,6 +38,7 @@ import net.minecraft.world.World;
 import org.jetbrains.annotations.NotNull;
 import java.util.*;
 
+import static K_K_L_L.IceRail.addon.modules.IceRailNuker.getIsBreakingHardBlock;
 import static meteordevelopment.meteorclient.utils.world.BlockUtils.getPlaceSide;
 
 import static K_K_L_L.IceRail.addon.modules.IceRailAutoReplenish.findBestBlueIceShulker;
@@ -75,6 +76,7 @@ public class IceHighwayBuilder extends Module {
     public static int swapSlot;
     public static int trashCount;
     public static float oldYaw;
+    private int tick = 0;
 
     public IceHighwayBuilder() {
         super(IceRail.CATEGORY, "ice-highway-builder", "Automated ice highway builder.");
@@ -132,7 +134,7 @@ public class IceHighwayBuilder extends Module {
     //Highway building setting
     public final Setting<Highways> highway = sgHighway.add(new EnumSetting.Builder<Highways>()
             .name("highway")
-            .description("Selection mode.")
+            .description("Make sure to select the highway you are on.")
             .defaultValue(Highways.East)
             .build()
     );
@@ -221,7 +223,15 @@ public class IceHighwayBuilder extends Module {
                     Items.EXPERIENCE_BOTTLE,
                     Items.CRAFTING_TABLE,
                     Items.FIREWORK_ROCKET,
-                    Items.ELYTRA
+                    Items.ELYTRA,
+                    Items.ACACIA_BOAT,
+                    Items.BIRCH_BOAT,
+                    Items.CHERRY_BOAT,
+                    Items.DARK_OAK_BOAT,
+                    Items.JUNGLE_BOAT,
+                    Items.OAK_BOAT,
+                    Items.SPRUCE_BOAT,
+                    Items.MANGROVE_BOAT
             )
             .build()
     );
@@ -244,20 +254,6 @@ public class IceHighwayBuilder extends Module {
             .build()
     );
 
-    public final Setting<Boolean> nukerSwingHand = sgIceRailNuker.add(new BoolSetting.Builder()
-            .name("swing-hand")
-            .description("Swing hand client side.")
-            .defaultValue(true)
-            .build()
-    );
-
-    public final Setting<Boolean> nukerPacketMine = sgIceRailNuker.add(new BoolSetting.Builder()
-            .name("packet-mine")
-            .description("Attempt to instamine everything at once.")
-            .defaultValue(true)
-            .build()
-    );
-
     public final Setting<Boolean> nukerRotate = sgIceRailNuker.add(new BoolSetting.Builder()
             .name("rotate")
             .description("Rotates server-side to the block being mined.")
@@ -275,7 +271,21 @@ public class IceHighwayBuilder extends Module {
     public final Setting<List<Block>> nukerBlacklist = sgIceRailNuker.add(new BlockListSetting.Builder()
             .name("blacklist")
             .description("The blocks you don't want to mine.")
-            .defaultValue(Blocks.BLUE_ICE)
+            .defaultValue(
+                    Blocks.BLUE_ICE,
+                    Blocks.OAK_SIGN,
+                    Blocks.BIRCH_SIGN,
+                    Blocks.SPRUCE_SIGN,
+                    Blocks.ACACIA_SIGN,
+                    Blocks.CHERRY_SIGN,
+                    Blocks.BAMBOO_SIGN,
+                    Blocks.JUNGLE_SIGN,
+                    Blocks.WARPED_SIGN,
+                    Blocks.CRIMSON_SIGN,
+                    Blocks.DARK_OAK_SIGN,
+                    Blocks.MANGROVE_SIGN,
+                    Blocks.TORCH
+            )
             .visible(() -> nukerListMode.get() == IceRailNuker.ListMode.Blacklist)
             .build()
     );
@@ -319,8 +329,13 @@ public class IceHighwayBuilder extends Module {
     );
 
     public Direction getPlayerCurrentDirection() {
-        assert mc.player != null;
-        return mc.player.getHorizontalFacing();
+        return switch(highway.get()) {
+            case East -> Direction.EAST;
+            case West -> Direction.WEST;
+            case North -> Direction.NORTH;
+            case South -> Direction.SOUTH;
+            case Southeast, Southwest, Northeast, Northwest -> null;
+        };
     }
 
     public static BlockPos getHighwayCoords() {
@@ -390,6 +405,7 @@ public class IceHighwayBuilder extends Module {
         releaseForward();
         resetState();
         shutdownScheduler1();
+        mc.options.attackKey.setPressed(false);
 
     }
 
@@ -504,7 +520,7 @@ public class IceHighwayBuilder extends Module {
             stacksStolen = 0;
         }
         if ((stacksStolen >= numberOfSlotsToSteal)
-                || stacksStolen >= 27
+                || stacksStolen >= 27 || slotNumber > 26
         ) {
             // Run post restocking
             isPostRestocking = true;
@@ -529,13 +545,13 @@ public class IceHighwayBuilder extends Module {
             }
             if (restockingType == 1) {
                 InvUtils.quickSwap().fromId(t_slot).toId(slotNumber);
-                stacksStolen++;
             }
             else {
-                steal(handler, slotNumber);
+                if (handler.getSlot(slotNumber).getStack().getItem() == Items.BLUE_ICE) steal(handler, slotNumber);
                 slotNumber++;
                 stealingDelay = 0;
             }
+            stacksStolen++;
         }
     }
 
@@ -711,11 +727,13 @@ public class IceHighwayBuilder extends Module {
         }
 
         if (isClearingInventory) {
+            toggleIcePlacerAndNuker(false);
             handleClearInventory();
             releaseForward();
             return;
         }
         if (isGoingToHighway) {
+            toggleIcePlacerAndNuker(false);
             handleInvalidPosition(0);
             return;
         }
@@ -730,24 +748,28 @@ public class IceHighwayBuilder extends Module {
         }
 
         if (isHolesInIce()) {
+            toggleIcePlacerAndNuker(false);
             setHWCoords(1);
             handleInvalidPosition(1);
             return;
         }
 
         if (isPostRestocking) {
+            toggleIcePlacerAndNuker(false);
             handlePostRestocking();
             releaseForward();
             return;
         }
 
         if (isRestocking) {
+            toggleIcePlacerAndNuker(false);
             handleRestocking();
             releaseForward();
             return;
         }
 
         if (countItems(Items.BLUE_ICE) <= 8) {
+            toggleIcePlacerAndNuker(false);
             ItemStack BlueIceShulker = findBestBlueIceShulker();
 
             if (BlueIceShulker == null && !isPlacingShulker) {
@@ -780,6 +802,7 @@ public class IceHighwayBuilder extends Module {
         }
 
         if (countUsablePickaxes() == 0) {
+            toggleIcePlacerAndNuker(false);
             ItemStack PicksShulker = findBestPicksShulker();
 
             if (PicksShulker == null && !isPlacingShulker) {
@@ -813,17 +836,9 @@ public class IceHighwayBuilder extends Module {
 
         lockRotation();
 
-        if (icePlacer.isActive()) { // Toggle off
-            icePlacer.toggle();
-            iceRailNuker.toggle();
-        } else {
-            if (!getIsEating()) { // Toggle on
-                icePlacer.toggle();
-                iceRailNuker.toggle();
-            }
-        }
+        toggleIcePlacerAndNuker(!getIsEating());
 
-        walkForward = !getIsEating();
+        walkForward = !getIsEating() && !getIsBreakingHardBlock();
 
         if (needsToScaffold()) {
             boolean isAirInFront = false;
@@ -846,7 +861,7 @@ public class IceHighwayBuilder extends Module {
             if (isAirInFront)
                 walkForward = false;
         } else
-            walkForward = !getIsEating();
+            walkForward = !getIsEating() && !getIsBreakingHardBlock();
 
         if (!walkForward) {
             setKeyPressed(mc.options.forwardKey, false);
@@ -860,6 +875,7 @@ public class IceHighwayBuilder extends Module {
             setKeyPressed(mc.options.rightKey, true);    // D
         else
             setKeyPressed(mc.options.leftKey, true);    // A
+        tick ++;
     }
 
     public static void lookAtBlock(BlockPos blockPos) {
@@ -933,15 +949,27 @@ public class IceHighwayBuilder extends Module {
         switch (getPlayerDirection()) {
             case NORTH, SOUTH -> {
                 return mc.player.getBlockY() == playerY &&
-                        mc.player.getBlockX() == playerX;
+                        Math.abs(mc.player.getX() - (((double) playerX) + 0.5)) < 0.2;
             }
             case EAST, WEST -> {
                 return mc.player.getBlockY() == playerY &&
-                        mc.player.getBlockZ() == playerZ;
+                        Math.abs(mc.player.getZ() - (((double) playerZ) + 0.5)) < 0.2;
             }
         }
 
         return false;
+    }
+
+    private void toggleIcePlacerAndNuker(boolean state) {
+        Module iceRailNuker = Modules.get().get("ice-rail-nuker");
+        Module icePlacer = Modules.get().get("ice-placer");
+        if (icePlacer.isActive() != state) {
+            //if (state || tick % 2 == 0)
+            icePlacer.toggle();
+        }
+        if (iceRailNuker.isActive() != state) {
+            iceRailNuker.toggle();
+        }
     }
 
     private boolean isHolesInIce() {
@@ -1032,6 +1060,7 @@ public class IceHighwayBuilder extends Module {
         assert mc.player != null;
         mc.player.setPitch(0);
 
+        if (getIsBreakingHardBlock()) return;
         Direction direction = getPlayerDirection();
 
         switch (direction) {
@@ -1054,12 +1083,14 @@ public class IceHighwayBuilder extends Module {
         Module iceRailAutoEat = Modules.get().get("ice-rail-auto-eat");
         Module iceRailAutoReplenish = Modules.get().get("ice-rail-auto-replenish");
         Module scaffoldGrim = Modules.get().get("scaffold-grim");
-        if (enableAutoEat.get() && !iceRailAutoEat.isActive()) iceRailAutoEat.toggle();
+        Module icePlacer = Modules.get().get("ice-placer");
+        Module iceRailNuker = Modules.get().get("ice-rail-nuker");
 
-        if (iceRailAutoReplenish != null && !iceRailAutoReplenish.isActive())
-            iceRailAutoReplenish.toggle();
-        Module ScaffoldGrim = Modules.get().get("scaffold-grim");
+        if (enableAutoEat.get() && !iceRailAutoEat.isActive()) iceRailAutoEat.toggle();
+        if (iceRailAutoReplenish != null && !iceRailAutoReplenish.isActive()) iceRailAutoReplenish.toggle();
         if (!scaffoldGrim.isActive()) scaffoldGrim.toggle();
+        if (!icePlacer.isActive()) icePlacer.toggle();
+        if (!iceRailNuker.isActive()) iceRailNuker.toggle();
     }
 
     private void disableAllModules() {
