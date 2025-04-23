@@ -398,6 +398,7 @@ public class BlueIceMiner extends Module {
         }
 
         if (state.equals("dumpBlueIce")) {
+            //Possible improvement: Use shiftClick() with an ID from 27-63 to dump into shulker.
             cancelBaritone();
             error("cancelBaritone 400");
             scanningWorld2 = true;

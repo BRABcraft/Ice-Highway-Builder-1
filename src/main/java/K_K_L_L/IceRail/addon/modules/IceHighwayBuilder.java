@@ -545,13 +545,14 @@ public class IceHighwayBuilder extends Module {
             }
             if (restockingType == 1) {
                 InvUtils.quickSwap().fromId(t_slot).toId(slotNumber);
+                stacksStolen++;
             }
             else {
                 if (handler.getSlot(slotNumber).getStack().getItem() == Items.BLUE_ICE) steal(handler, slotNumber);
                 slotNumber++;
                 stealingDelay = 0;
             }
-            stacksStolen++;
+            error("stacksStolen = " + stacksStolen + " slotNumber = " + slotNumber + " item = " + handler.getSlot(slotNumber).getStack().getItem());
         }
     }
 
@@ -773,10 +774,18 @@ public class IceHighwayBuilder extends Module {
             ItemStack BlueIceShulker = findBestBlueIceShulker();
 
             if (BlueIceShulker == null && !isPlacingShulker) {
-                if (BlueIceMiner.state.equals("idle")) {
-                    releaseForward();
-                    BlueIceMiner.state = "goToPortal";
-                    BlueIceMiner.scanningWorld = true;
+                if (enableBlueIceMiner.get()) {
+                    if (BlueIceMiner.state.equals("idle")) {
+                        Module blueIceMiner = Modules.get().get("blue-ice-miner");
+                        if (!blueIceMiner.isActive()) blueIceMiner.toggle();
+                        releaseForward();
+                        BlueIceMiner.state = "goToPortal";
+                        BlueIceMiner.scanningWorld = true;
+                    }
+                } else {
+                    error("Out of blue ice");
+                    disableAllModules();
+                    toggle();
                 }
                 return;
             }
