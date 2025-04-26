@@ -104,7 +104,9 @@ public class IcePlacer extends Module {
         if (place(Items.NETHERRACK, guardrail2.up(-1), true)) return;
         if (shouldPlace) {
             if (place(Items.NETHERRACK, targetPos2, false)) return;
-            place(Items.BLUE_ICE, targetPos, false);
+            switchToItem(Items.BLUE_ICE);
+            BlockUtils.place(targetPos, InvUtils.findInHotbar(itemStack ->
+                    itemStack.getItem() == Items.BLUE_ICE), false, 0, true, true);
         }
     }
 }

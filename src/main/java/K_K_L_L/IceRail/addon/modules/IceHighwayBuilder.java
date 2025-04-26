@@ -77,6 +77,10 @@ public class IceHighwayBuilder extends Module {
     public static int trashCount;
     public static float oldYaw;
     private int tick = 0;
+    int toolSlot;
+    int shulkerSlot;
+    int placingSlot;
+    int trashSlot;
 
     public IceHighwayBuilder() {
         super(IceRail.CATEGORY, "ice-highway-builder", "Automated ice highway builder.");
@@ -373,6 +377,12 @@ public class IceHighwayBuilder extends Module {
 
         assert mc.player != null;
         playerDirection = getPlayerCurrentDirection();
+
+        IceRailAutoReplenish autoReplenish = Modules.get().get(IceRailAutoReplenish.class);
+        toolSlot = autoReplenish.toolSlot.get();
+        shulkerSlot = autoReplenish.shulkerSlot.get();
+        placingSlot = autoReplenish.placingSlot.get();
+        trashSlot = autoReplenish.trashSlot.get();
     }
 
     private boolean validateInitialConditions() {
@@ -573,14 +583,12 @@ public class IceHighwayBuilder extends Module {
         if (!throwBlacklist.get().contains(mc.player.getInventory().getStack(slot3).getItem())) {
             InvUtils.drop().slot(slot3);
         } else {
-            int slot2 = 9;
             for (int j = 9; j < 36; j++) {
                 if (!throwBlacklist.get().contains(mc.player.getInventory().getStack(slot3).getItem())) {
-                    slot2 = j;
+                    InvUtils.quickSwap().fromId(slot3).toId(j);
                     break;
                 }
             }
-            InvUtils.quickSwap().fromId(slot3).toId(slot2);
         }
     }
     public void handleClearInventory() {
@@ -612,19 +620,19 @@ public class IceHighwayBuilder extends Module {
             for (int i = 2; i < 36; i++) {
                 ItemStack itemStack = mc.player.getInventory().getStack(i);
                 if (!itemStack.isEmpty() && !throwBlacklist.get().contains(itemStack.getItem()) && (trashCount > 1)) {
-                    if (mc.player.getInventory().getStack(6).isEmpty()) {
-                        InvUtils.move().from(6).to(i);
+                    if (mc.player.getInventory().getStack(trashSlot).isEmpty()) {
+                        InvUtils.move().from(trashSlot).to(i);
                         if (i < 9) {
                             InvUtils.swap(i, false);
                         } else {
-                            InvUtils.swap(6, false);
+                            InvUtils.swap(trashSlot, false);
                         }
                     }
                     if (stealingDelay == 5) {
                         if (i < 9) {
                             dropSlot(i);
                         } else {
-                            dropSlot(6);
+                            dropSlot(trashSlot);
                         }
                     }
                     return;
@@ -711,8 +719,13 @@ public class IceHighwayBuilder extends Module {
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
-        if (mc.player == null || mc.world == null || playerX == null || playerY == null || playerZ == null) return;
+        if (playerX == null) initializeRequiredVariables();
+        if (mc.player == null || mc.world == null || playerX == null || playerY == null || playerZ == null) {
+            error("ice highway builder was null");
+            return;
+        }
         boolean walkForward;
+        playerDirection = getPlayerCurrentDirection();
 
         Module iceRailAutoEat = Modules.get().get("ice-rail-auto-eat");
         Module iceRailNuker = Modules.get().get("ice-rail-nuker");
@@ -720,6 +733,7 @@ public class IceHighwayBuilder extends Module {
 
         BlueIceMiner object = new BlueIceMiner();
         if (object.getIsPathing()) {
+            error("isPathing");
             return;
         }
         if (iceRailAutoEat != null) {

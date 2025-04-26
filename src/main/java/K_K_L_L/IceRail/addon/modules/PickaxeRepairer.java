@@ -84,4 +84,8 @@ public class PickaxeRepairer extends Module {
             .description("Z coordinate to stand on when grinding.")
             .defaultValue(0)
             .build());
+    @Override
+    public void onActivate() {
+        error("PickaxeRepairer activated");
+    }
 }

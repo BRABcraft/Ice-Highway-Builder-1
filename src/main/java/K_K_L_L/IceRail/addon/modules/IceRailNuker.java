@@ -133,7 +133,6 @@ public class IceRailNuker extends Module {
     @EventHandler
     private void onTickPre(TickEvent.Pre event) {
         if (playerX == null || playerY == null || playerZ == null) return;
-
         if (isGoingToHighway || getIsEating()) return;
 
         if (timer > 0) {
@@ -142,14 +141,12 @@ public class IceRailNuker extends Module {
         }
 
         if (mc.player == null) return;
+        if (getPlayerDirection() == null) return;
 
         if (!isBreaking) mc.options.attackKey.setPressed(false);
 
-        if (getPlayerDirection() == null) return;
-
         BlockPos pos1 = getRegion1Start();
         BlockPos pos2 = getRegion1End();
-
         if (pos1 == null || pos2 == null) return;
 
         int maxWidth = Math.abs(pos2.getX() - pos1.getX()) + 1;
@@ -207,12 +204,12 @@ public class IceRailNuker extends Module {
             if (count >= 4 && block.getY() > 115) break;
 
             boolean canInstaMine = BlockUtils.canInstaBreak(block);
-            mc.options.attackKey.setPressed(!mc.world.isAir(block));
-            if (rotate.get()) {
-                Rotations.rotate(Rotations.getYaw(block), Rotations.getPitch(block), () -> breakBlock(block));
-            } else {
-                breakBlock(block);
-            }
+            mc.options.attackKey.setPressed(!mc.world.isAir(block) && !canInstaMine);
+            breakBlock(block);
+
+//            if (rotate.get()) {
+//                Rotations.rotate(Rotations.getYaw(block), Rotations.getPitch(block), () -> breakBlock(block));
+//            }
 
             if (enableRenderBreaking.get()) {
                 RenderUtils.renderTickingBlock(block, sideColor.get(), lineColor.get(), shapeModeBreak.get(), 0, 8, true, false);
@@ -228,16 +225,21 @@ public class IceRailNuker extends Module {
     }
 
     private void breakBlock(BlockPos blockPos) {
-        if (blockPos == null) return;
-        switchToBestTool(blockPos);
-        assert mc.world != null;
-        setIsBreakingHardBlock(mc.world.getBlockState(blockPos).getBlock() != Blocks.NETHERRACK);
-        setIsBreaking(true);
         assert mc.world != null;
         if (mc.world.isAir(blockPos)) return;
-        lookAtBlock(blockPos);
-        error("nuker looked at block: " + blockPos);
-        assert mc.world != null;
+        if (blockPos == null) return;
+
+        boolean isBreakingNetherrack = mc.world.getBlockState(blockPos).getBlock() == Blocks.NETHERRACK;
+        setIsBreakingHardBlock(isBreakingNetherrack);
+        setIsBreaking(true);
+
+        if (isBreakingNetherrack) {
+            error("broke netherrack");
+            BlockUtils.breakBlock(blockPos, true);
+        } else {
+            switchToBestTool(blockPos);
+            lookAtBlock(blockPos);
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)

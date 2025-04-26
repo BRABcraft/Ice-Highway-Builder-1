@@ -216,7 +216,7 @@ public class IceRailAutoReplenish extends Module {
         return false;
     }
 
-    private static boolean hasPicksInShulker(ItemStack shulkerBox) {
+    public static boolean hasPicksInShulker(ItemStack shulkerBox) {
         ItemStack[] containerItems = new ItemStack[27];
         Utils.getItemsInContainerItem(shulkerBox, containerItems);
 
