@@ -112,6 +112,9 @@ public class BlueIceMiner extends Module {
     private boolean full = false;
     private boolean returnToSlot = false;
     public int mineDurationReal = 0;
+    public boolean wasRestockingSilkPicks = false;
+    public boolean wasPathingToTridentDrowned = false;
+    public BlockPos returnCoords;
 
     MinecraftClient mc = MinecraftClient.getInstance();
 
@@ -305,7 +308,17 @@ public class BlueIceMiner extends Module {
             error("killaura");
             return;
         }
-        if (!state.equals("flyToBlueIce") && pathToTridentDrowned()) {
+        boolean pathToTridentDrowned = pathToTridentDrowned();
+        if (pathToTridentDrowned != wasPathingToTridentDrowned) {
+            wasPathingToTridentDrowned = pathToTridentDrowned;
+            if (pathToTridentDrowned) {
+                returnCoords = mc.player.getBlockPos();
+            } else if (!PlayerUtils.isWithin(returnCoords, 10)){
+                createCustomGoalProcess(returnCoords);
+                return;
+            }
+        }
+        if (!state.equals("flyToBlueIce") && pathToTridentDrowned) {
             error("Moving towards a trident drowned");
             return;
         }
@@ -408,14 +421,20 @@ public class BlueIceMiner extends Module {
             cancelBaritone();
             error("cancelBaritone 400");
             scanningWorld2 = true;
+            error("blueIceTotal - 64 < blueIceSlots =  " + (blueIceTotal - 64 < blueIceSlots));
             if (full || blueIceTotal - 64 < blueIceSlots) {
-                if (mineAndGatherShulk()) return true;
+                if (mineAndGatherShulk()) {
+                    error("mine_AndGatherShulk 414");
+                    return true;
+                }
                 state = returnToState;
                 error("9");
                 return true;
             }
+            mc.options.attackKey.setPressed(false);
 
             if (mc.player.currentScreenHandler == mc.player.playerScreenHandler) {
+                error("shulkerBlockPos = " + shulkerBlockPos);
                 openShulker();
                 error("8");
                 return true;
@@ -482,9 +501,8 @@ public class BlueIceMiner extends Module {
                         return true;
                     }
                     if (mc.player.getInventory().selectedSlot != shulkerSlot) {
+                        error("2, current slot: " + mc.player.getInventory().selectedSlot);
                         InvUtils.swap(shulkerSlot, false);
-                        error("2, blueIceTotal = " + blueIceTotal + "blueIceSlots = " + blueIceSlots);
-                        return true;
                     }
                     BlockPos block = mc.player.getBlockPos().down();
                     boolean blockIsShulker = mc.world.getBlockState(block).getBlock() instanceof ShulkerBoxBlock;
@@ -720,8 +738,8 @@ public class BlueIceMiner extends Module {
     private boolean restockSilkPickaxes() {
         assert mc.player != null;
         assert mc.world != null;
-        error("countUsablePickaxes: " + countUsablePickaxes());
         if (countUsablePickaxes() < 1) {
+            error("restockingSilkPicks");
             for (int i = 0; i < 36; i++) {
                 ItemStack stack = mc.player.getInventory().getStack(i);
                 if (hasPicksInShulker(stack)) {
@@ -745,20 +763,24 @@ public class BlueIceMiner extends Module {
                 ItemStack stack = mc.player.currentScreenHandler.getSlot(j).getStack();
                 if (stack.getItem() instanceof PickaxeItem && stack.getDamage() < stack.getMaxDamage() - 50) {
                     InvUtils.quickSwap().fromId(toolSlot).toId(j);
+                    wasRestockingSilkPicks = true;
                     break;
                 }
             }
             return true;
-        } else {
+        } else if (wasRestockingSilkPicks) {
+            error("mine_andGatherShulk 758");
             return mineAndGatherShulk();
         }
+        return false;
     }
 
     private boolean mineAndGatherShulk() {
         assert mc.world != null;
-        swapToPickaxe();
+        if (shulkerBlockPos == null) return false;
         if (mc.world.getBlockState(shulkerBlockPos).getBlock() instanceof ShulkerBoxBlock) {
             if (PlayerUtils.isWithinReach(shulkerBlockPos)) {
+                swapToPickaxe();
                 if (BlockUtils.breakBlock(shulkerBlockPos, true))
                     return true;
             }
@@ -773,6 +795,7 @@ public class BlueIceMiner extends Module {
                 return true;
             }
         }
+        wasRestockingSilkPicks = false;
         return false;
     }
 
@@ -929,8 +952,10 @@ public class BlueIceMiner extends Module {
                 }
             }
             if (smallestDistance > 5 || groups.isEmpty()) {
-                groups.add(new BlockPos(foundIce));
-                groups.add(1);
+                if (!isNearOceanMonument(foundIce)) {
+                    groups.add(new BlockPos(foundIce));
+                    groups.add(1);
+                }
             } else {
                 if (((BlockPos) groups.get(iceBergIndex)).getY() < foundIce.getY()) {
                     groups.set(iceBergIndex, new BlockPos(foundIce));
@@ -973,6 +998,30 @@ public class BlueIceMiner extends Module {
             currentIceberg = j * 2;
         }
         return (BlockPos) groups.get(j * 2);
+    }
+
+    public boolean isNearOceanMonument(BlockPos position) {
+        assert mc.world != null;
+        int X = position.getX();
+        int Z = position.getZ();
+        int Y = position.getY();
+        for (int x = X - 30; x <= X + 30; x+= 3) {
+            for (int z = Z - 30; z <= Z + 30; z+= 3) {
+                for (int y = Y - 30; y <= Y + 6; y+= 2) {
+                    Block block = mc.world.getBlockState(new BlockPos(x, y, z)).getBlock();
+                    List<Block> monumentBlocks = List.of(
+                            Blocks.PRISMARINE,
+                            Blocks.PRISMARINE_BRICKS,
+                            Blocks.DARK_PRISMARINE,
+                            Blocks.SEA_LANTERN,
+                            Blocks.WET_SPONGE);
+                    if (monumentBlocks.contains(block)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     private void disableAllModules() {
@@ -1774,6 +1823,7 @@ public class BlueIceMiner extends Module {
         }
 
         if (!hasItems || full) {
+            error("mine_AndGatherShulk 1782");
             return mineAndGatherShulk();
         }
 
