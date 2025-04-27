@@ -24,9 +24,7 @@ import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.ShulkerBoxBlock;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
+import net.minecraft.item.*;
 import net.minecraft.network.packet.c2s.play.PlayerInteractBlockC2SPacket;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.util.Hand;
@@ -38,12 +36,9 @@ import net.minecraft.world.World;
 import org.jetbrains.annotations.NotNull;
 import java.util.*;
 
+import static K_K_L_L.IceRail.addon.modules.IceRailAutoReplenish.*;
 import static K_K_L_L.IceRail.addon.modules.IceRailNuker.getIsBreakingHardBlock;
 import static meteordevelopment.meteorclient.utils.world.BlockUtils.getPlaceSide;
-
-import static K_K_L_L.IceRail.addon.modules.IceRailAutoReplenish.findBestBlueIceShulker;
-import static K_K_L_L.IceRail.addon.modules.IceRailAutoReplenish.findBestPicksShulker;
-import static K_K_L_L.IceRail.addon.modules.IceRailAutoReplenish.findPickToSwap;
 
 public class IceHighwayBuilder extends Module {
     private int slotNumber;
@@ -81,6 +76,7 @@ public class IceHighwayBuilder extends Module {
     int shulkerSlot;
     int placingSlot;
     int trashSlot;
+    int placeTickCounter = 0;
 
     public IceHighwayBuilder() {
         super(IceRail.CATEGORY, "ice-highway-builder", "Automated ice highway builder.");
@@ -364,11 +360,11 @@ public class IceHighwayBuilder extends Module {
             toggle();
             return;
         }
-        if (mc.player.getWorld().getRegistryKey() != World.NETHER) {
-            error("Player must be in the nether. Did you mean to enable Blue Ice Miner or Pickaxe Repairer?");
-            toggle();
-            return;
-        }
+//        if (mc.player.getWorld().getRegistryKey() != World.NETHER) {
+//            error("Player must be in the nether. Did you mean to enable Blue Ice Miner or Pickaxe Repairer?");
+//            toggle();
+//            return;
+//        }
         initializeRequiredVariables();
         enableRequiredModules();
 
@@ -554,6 +550,13 @@ public class IceHighwayBuilder extends Module {
                 stackRecentlyStolen = false;
             }
             if (restockingType == 1) {
+                for (int j = 0; j < 27; j++) {
+                    ItemStack stack = mc.player.currentScreenHandler.getSlot(j).getStack();
+                    if (stack.getItem() instanceof PickaxeItem && stack.getDamage() < stack.getMaxDamage() - 50) {
+                        slotNumber = j;
+                        break;
+                    }
+                }
                 InvUtils.quickSwap().fromId(t_slot).toId(slotNumber);
                 stacksStolen++;
             }
@@ -654,6 +657,8 @@ public class IceHighwayBuilder extends Module {
                 BlueIceMiner.state = BlueIceMiner.NewState;
                 if (BlueIceMiner.state.equals("waitingForGather")) {
                     IceRailGatherItem(Items.OBSIDIAN);
+                } else {
+                    BlueIceMiner.shouldEnableIceHighwayBuilder = false;
                 }
             }
             isClearingInventory = false;
@@ -719,6 +724,7 @@ public class IceHighwayBuilder extends Module {
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
+        if (!isActive()) return;
         if (playerX == null) initializeRequiredVariables();
         if (mc.player == null || mc.world == null || playerX == null || playerY == null || playerZ == null) {
             error("ice highway builder was null");
@@ -736,6 +742,7 @@ public class IceHighwayBuilder extends Module {
             error("isPathing");
             return;
         }
+        if (!BlueIceMiner.shouldEnableIceHighwayBuilder && mc.world.getDimension().bedWorks()) return;
         if (iceRailAutoEat != null) {
             BoolSetting amountSetting = (BoolSetting) iceRailAutoEat.settings.get("eat-egap-when-burning");
             if (amountSetting != null) amountSetting.set(eatEGaps.get());
@@ -747,6 +754,7 @@ public class IceHighwayBuilder extends Module {
             releaseForward();
             return;
         }
+        if (mc.world.getDimension().bedWorks()) return;
         if (isGoingToHighway) {
             toggleIcePlacerAndNuker(false);
             handleInvalidPosition(0);
@@ -766,8 +774,12 @@ public class IceHighwayBuilder extends Module {
             toggleIcePlacerAndNuker(false);
             setHWCoords(1);
             handleInvalidPosition(1);
+            placeTickCounter = 0;
             return;
         }
+        placeTickCounter++;
+
+        mc.options.backKey.setPressed(placeTickCounter < 20 && placeTickCounter % 10 < 4);
 
         if (isPostRestocking) {
             toggleIcePlacerAndNuker(false);
@@ -845,10 +857,24 @@ public class IceHighwayBuilder extends Module {
                 }
             }
 
+            for (int i = 0; i < 36; i++) {
+                ItemStack stack = mc.player.getInventory().getStack(i);
+                if (stack.getItem() instanceof BlockItem &&
+                        ((BlockItem) stack.getItem()).getBlock() instanceof ShulkerBoxBlock) {
+                    if (hasPicksInShulker(stack)) {
+                        if (i > 8) {
+                            InvUtils.quickSwap().fromId(shulkerSlot).toId(i);
+                            swapSlot = shulkerSlot;
+                        } else {
+                            swapSlot = i;
+                        }
+                    }
+                }
+            }
+
             restockingType = 1;
             isPlacingShulker = true;
             numberOfSlotsToSteal = 1;
-            swapSlot = findPickToSwap(mc.player.getInventory().getStack(7));
             slotNumber = swapSlot;
             // Initiate inventory clear
             stealingDelay = 0;
@@ -971,12 +997,12 @@ public class IceHighwayBuilder extends Module {
         assert mc.player != null;
         switch (getPlayerDirection()) {
             case NORTH, SOUTH -> {
-                return mc.player.getBlockY() == playerY &&
-                        Math.abs(mc.player.getX() - (((double) playerX) + 0.5)) < 0.2;
+                return mc.player.getBlockY() == 114 &&
+                        Math.abs(mc.player.getX() + 200.5) < 0.2;
             }
             case EAST, WEST -> {
-                return mc.player.getBlockY() == playerY &&
-                        Math.abs(mc.player.getZ() - (((double) playerZ) + 0.5)) < 0.2;
+                return mc.player.getBlockY() == 114 &&
+                        Math.abs(mc.player.getZ() + 198.5) < 0.2;
             }
         }
 

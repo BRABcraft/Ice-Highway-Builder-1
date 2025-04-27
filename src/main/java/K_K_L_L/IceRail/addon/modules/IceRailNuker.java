@@ -132,6 +132,7 @@ public class IceRailNuker extends Module {
 
     @EventHandler
     private void onTickPre(TickEvent.Pre event) {
+        if (!isActive()) return;
         if (playerX == null || playerY == null || playerZ == null) return;
         if (isGoingToHighway || getIsEating()) return;
 
@@ -228,8 +229,8 @@ public class IceRailNuker extends Module {
         assert mc.world != null;
         if (mc.world.isAir(blockPos)) return;
         if (blockPos == null) return;
-
-        boolean isBreakingNetherrack = mc.world.getBlockState(blockPos).getBlock() == Blocks.NETHERRACK;
+        Block block = mc.world.getBlockState(blockPos).getBlock();
+        boolean isBreakingNetherrack = block == Blocks.NETHERRACK || block == Blocks.FIRE || block == Blocks.SOUL_FIRE;
         setIsBreakingHardBlock(isBreakingNetherrack);
         setIsBreaking(true);
 

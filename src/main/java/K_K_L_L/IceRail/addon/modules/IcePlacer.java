@@ -46,8 +46,8 @@ public class IcePlacer extends Module {
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
-        assert mc.world != null;
-        assert mc.player != null;
+        if (!isActive()) return;
+        if (mc.player == null || mc.world == null) return;
         tick++;
         if (tick % 3 < 2) return;
         playerX = mc.player.getBlockX();

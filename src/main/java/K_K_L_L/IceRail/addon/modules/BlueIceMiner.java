@@ -115,6 +115,7 @@ public class BlueIceMiner extends Module {
     public boolean wasRestockingSilkPicks = false;
     public boolean wasPathingToTridentDrowned = false;
     public BlockPos returnCoords;
+    public static boolean shouldEnableIceHighwayBuilder = false;
 
     MinecraftClient mc = MinecraftClient.getInstance();
 
@@ -172,6 +173,12 @@ public class BlueIceMiner extends Module {
             .min(70)
             .max(200)
             .sliderRange(70, 200)
+            .build()
+    );
+    private final Setting<Boolean> saveObsidian = sgPortal.add(new BoolSetting.Builder()
+            .name("save-obsidian")
+            .description("Mines nether portal after going through.")
+            .defaultValue(false)
             .build()
     );
     // Blue Ice mining settings
@@ -236,6 +243,7 @@ public class BlueIceMiner extends Module {
         wasGathering = false;
         returnToSlot = false;
         isPathing = false;
+        buildTimer = 0;
 
         cancelBaritone();
         error("cancelBaritone 235");
@@ -252,6 +260,7 @@ public class BlueIceMiner extends Module {
         wasGathering = false;
         returnToSlot = false;
         isPathing = false;
+        buildTimer = 0;
         Module iceRailGatherItem = Modules.get().get("ice-rail-gather-item");
         if (iceRailGatherItem.isActive()) iceRailGatherItem.toggle();
         cancelBaritone();
@@ -308,8 +317,10 @@ public class BlueIceMiner extends Module {
             error("killaura");
             return;
         }
+
         boolean pathToTridentDrowned = pathToTridentDrowned();
         if (pathToTridentDrowned != wasPathingToTridentDrowned) {
+            error("pathToTridentDrowned state changed to " + pathToTridentDrowned);
             wasPathingToTridentDrowned = pathToTridentDrowned;
             if (pathToTridentDrowned) {
                 returnCoords = mc.player.getBlockPos();
@@ -322,6 +333,20 @@ public class BlueIceMiner extends Module {
             error("Moving towards a trident drowned");
             return;
         }
+
+        //After exiting a portal
+        if (state.equals("minePortal")) {
+            handleMinePortal();
+            return;
+        }
+
+        //After returning to the nether
+        if (state.equals("resumeBuilding")) {
+            handleResumeBuilding();
+            return;
+        }
+
+        //After entering the overworld
         if (manageInventory()) {
             return;
         } else {
@@ -350,20 +375,74 @@ public class BlueIceMiner extends Module {
             handleMineBlueIceInRange();
             return;
         }
+    }
 
-        //After returning to the nether
-        if (state.equals("resumeBuilding")) {
-            handleResumeBuilding();
+    private boolean getOutOfPortal() {
+        assert mc.world != null;
+        assert mc.player != null;
+        //If the player is in a nether portal, path out of the nether portal.
+        if (mc.world.getBlockState(mc.player.getBlockPos()).getBlock() == Blocks.NETHER_PORTAL) {
+            mc.options.forwardKey.setPressed(true);
+            return true;
+        }
+        mc.options.forwardKey.setPressed(false);
+        return false;
+    }
+
+    private void handleMinePortal() {
+        if (!saveObsidian.get()) {
+            state = NewState;
+            return;
+        }
+        //This method mines the nether portal after changing dimensions to save obsidian.
+        assert mc.world != null;
+        assert mc.player != null;
+        //Walk out of the portal
+        if (!getOutOfPortal()) {
+            //Get obsidian in 3 block radius
+            int X = mc.player.getBlockX();
+            int Z = mc.player.getBlockZ();
+            int Y = mc.player.getBlockY();
+            swapToPickaxe();
+            for (int x = X - 8; x <= X + 8; x++) {
+                for (int z = Z - 8; z <= Z + 8; z++) {
+                    for (int y = Y - 5; y <= Y + 5; y++) {
+                        BlockPos blockPos = new BlockPos(x, y, z);
+                        Block block = mc.world.getBlockState(blockPos).getBlock();
+                        if (block == Blocks.OBSIDIAN) {
+                            lookAtBlock(blockPos);
+                            //BlockUtils.breakBlock(blockPos, true);
+                            packetMine(blockPos);
+                            return;
+                        }
+                    }
+                }
+            }
+            if (countDroppedItem(mc.player, 5, Items.OBSIDIAN) > 0) {
+                IceRailGatherItem(Items.OBSIDIAN);
+            } else {
+                state = NewState;
+            }
         }
     }
 
     private void handleResumeBuilding() {
+        assert mc.player != null;
         IceHighwayBuilder iceHighwayBuilder = Modules.get().get(IceHighwayBuilder.class);
         if (!iceHighwayBuilder.isPlayerInValidPosition()) {
             //[NEEDS TESTING] baritone efly
             IElytraProcess elytraProcess = BaritoneAPI.getProvider().getPrimaryBaritone().getElytraProcess();
             if (!elytraProcess.isActive()) {
-                elytraProcess.pathTo(getHighwayCoords());
+                Highways highway = iceHighwayBuilder.highway.get();
+                int X = mc.player.getBlockX();
+                int Z = mc.player.getBlockZ();
+                int Y = mc.player.getBlockY();
+                BlockPos highwayCoords = switch (highway) {
+                    case East, West -> new BlockPos(X, Y, (Math.abs(Z + 199) < 64) ? -199 : (Z > -199) ? Z - 64 : Z + 64);
+                    case North, South -> new BlockPos((Math.abs(X + 201) < 64) ? -201 : (X > -201) ? X - 64 : X + 64, Y, Z);
+                    default -> null;
+                };
+                elytraProcess.pathTo(highwayCoords);
             }
         } else {
             //backtrack to blue ice
@@ -428,6 +507,7 @@ public class BlueIceMiner extends Module {
                     return true;
                 }
                 state = returnToState;
+                full = false;
                 error("9");
                 return true;
             }
@@ -478,9 +558,9 @@ public class BlueIceMiner extends Module {
                 return false;
             }
             if (blueIceTotal == blueIceSlots * 64 || remainingShulkers == 0) {
-                cancelBaritone();
-                error("cancelBaritone 466");
                 if (remainingShulkers > 0) {
+                    cancelBaritone();
+                    error("cancelBaritone 466");
                     assert firstValidShulker != -1;
                     scanningWorld2 = true;
                     if (firstValidShulker != shulkerSlot) {
@@ -529,6 +609,8 @@ public class BlueIceMiner extends Module {
                         foundBlock = !searchWorld(Blocks.NETHER_PORTAL).isEmpty();
                     }
                     if (!foundBlock) {
+                        cancelBaritone();
+                        error("cancelBaritone 536");
                         if (!search(Items.OBSIDIAN, placingSlot, 0)) {
                             error("No obsidian, cannot build a portal to return to the nether.");
                             disableAllModules();
@@ -584,6 +666,8 @@ public class BlueIceMiner extends Module {
     private boolean isTargetMob(LivingEntity entity) {
         if (entity instanceof EndermanEntity enderman && !enderman.isAngry()) return false;
         if (entity instanceof PolarBearEntity) return true;
+        if (entity instanceof PiglinEntity piglin) return piglin.isAngryAt(mc.player);
+        if (entity instanceof ZombifiedPiglinEntity) return false;
         return (entity instanceof HostileEntity);
     }
 
@@ -641,14 +725,14 @@ public class BlueIceMiner extends Module {
         List<LivingEntity> targets = mc.world.getEntitiesByClass(
                 LivingEntity.class,
                 mc.player.getBoundingBox().expand(20),
-                e -> e instanceof ZombieEntity);
+                e -> e instanceof ZombieEntity || e instanceof WitchEntity);
         if (targets == null || targets.isEmpty()) {
             return false;
         }
         LivingEntity target = null;
         for (LivingEntity entity : targets) {
             Item heldItem = entity.getMainHandStack().getItem();
-            if (heldItem == Items.TRIDENT || heldItem == Items.BLUE_ICE) {
+            if (heldItem == Items.TRIDENT || heldItem == Items.BLUE_ICE || entity instanceof WitchEntity) {
                 target = entity;
                 break;
             }
@@ -831,7 +915,7 @@ public class BlueIceMiner extends Module {
         //Type 1: Searches for a non-silk pickaxe, moves it to slot, opens shulker and retrieves
         //Type 2: Checks if inventory contains a pickaxe, slot doesn't matter
         //Type 3: Check if inventory contains an item, shulker restocks it if not
-
+        error("searching for " + item);
         foundCount = 0;
         if (condition(hotbarStack, type, item)) {
             foundCount = 1;
@@ -1042,12 +1126,17 @@ public class BlueIceMiner extends Module {
         }
     }
 
-    public static void packetMine(BlockPos block) {
+    public void packetMine(BlockPos block) {
         MinecraftClient mc = MinecraftClient.getInstance();
         assert mc.world != null;
         Block target = mc.world.getBlockState(block).getBlock();
-
-        if (target == Blocks.NETHERRACK) {
+        List<Block> instaBlocks = List.of(
+            Blocks.NETHERRACK,
+            Blocks.PACKED_ICE,
+            Blocks.ICE
+        );
+        swapToPickaxe();
+        if (instaBlocks.contains(target)) {
             BlockUtils.breakBlock(block, true);
         } else {
             lookAtBlock(block);
@@ -1191,15 +1280,16 @@ public class BlueIceMiner extends Module {
         scanningWorld = true;
         leg = 0;
         Module scaffoldGrim = Modules.get().get("scaffold-grim");
+        state = "minePortal";
         if (!dimension.bedWorks()) {
-            state = "flyToBlueIce";
+            NewState = "flyToBlueIce";
             hasFoundFrozenOcean = false;
             mc.player.setPitch((float) -45.0);
             if (scaffoldGrim.isActive()) {
                 scaffoldGrim.toggle();
             }
         } else {
-            state = "resumeBuilding";
+            NewState = "resumeBuilding";
             if (!scaffoldGrim.isActive()) {
                 scaffoldGrim.toggle();
             }
@@ -1524,14 +1614,9 @@ public class BlueIceMiner extends Module {
             assert portalOriginBlock != null;
             for (int i = 0; i < 20; i++) {
                 switch (getPlayerDirection()) {
-                    case NORTH, SOUTH -> {
-                        portalBlocks.add(portalOriginBlock.south(offset.get(i * 2)).up(offset.get(i * 2 + 1)));
-                    }
-                    case EAST, WEST -> {
-                        portalBlocks.add(portalOriginBlock.east(offset.get(i * 2)).up(offset.get(i * 2 + 1)));
-                    }
+                    case NORTH, SOUTH -> portalBlocks.add(portalOriginBlock.south(offset.get(i * 2)).up(offset.get(i * 2 + 1)));
+                    case EAST, WEST -> portalBlocks.add(portalOriginBlock.east(offset.get(i * 2)).up(offset.get(i * 2 + 1)));
                 }
-                ;
             }
         }
         buildTimer++;
@@ -1623,7 +1708,7 @@ public class BlueIceMiner extends Module {
             }
         }
 
-        if (countDroppedBlueIce(mc.player, 10) > 0) {
+        if (countDroppedItem(mc.player, 10, Items.BLUE_ICE) > 0) {
             gatherBlueIce();
             return;
         }
@@ -1685,23 +1770,7 @@ public class BlueIceMiner extends Module {
             return;
         }
 
-        //If the player is in a nether portal, path out of the nether portal.
-        if (mc.world.getBlockState(mc.player.getBlockPos()).getBlock() == Blocks.NETHER_PORTAL) {
-            BlockPos pos = mc.player.getBlockPos();
-            BlockPos goal;
-            if (mc.player.getY() > getMaxY(pos.east(2))) {
-                goal = pos.east(2).withY(getMaxY(pos.east(2)));
-            } else if (mc.player.getY() > getMaxY(pos.east(-2))) {
-                goal = pos.east(-2).withY(getMaxY(pos.east(-2)));
-            } else if (mc.player.getY() > getMaxY(pos.south(2))) {
-                goal = pos.east(2).withY(getMaxY(pos.south(2)));
-            } else {
-                goal = pos.east(-2).withY(getMaxY(pos.south(-2)));
-            }
-            isPathing = true;
-            createCustomGoalProcess(goal);
-            return;
-        }
+        if (getOutOfPortal()) return;
 
         //If player is safely out of the portal, dump FLINT AND STEEL and OBSIDIAN into a shulker
         if (dump(List.of(Items.FLINT_AND_STEEL, Items.OBSIDIAN, Items.NETHERRACK))) {
@@ -1873,6 +1942,8 @@ public class BlueIceMiner extends Module {
                 if (toSlot == -1) {
                     full = true;
                     return true;
+                } else {
+                    full = false;
                 }
                 if (tick % 4 == 1) {
                     if (i < 9) {
@@ -1924,7 +1995,6 @@ public class BlueIceMiner extends Module {
         if (iceRailGatherItem.isActive()) {
             iceRailGatherItem.toggle();
         }
-        error("cancelBaritone");
     }
 
     private void lookInRandomDirection() {
@@ -2008,12 +2078,12 @@ public class BlueIceMiner extends Module {
         }
     }
 
-    public static int countDroppedBlueIce(PlayerEntity player, int radius) {
+    public static int countDroppedItem(PlayerEntity player, int radius, Item targetItem) {
         World world = player.getWorld();
 
         return world.getEntitiesByClass(ItemEntity.class,
                         player.getBoundingBox().expand(radius),
-                        item -> item.getStack().getItem() == Items.BLUE_ICE)
+                        item -> item.getStack().getItem() == targetItem)
                 .stream()
                 .mapToInt(item -> item.getStack().getCount())
                 .sum();
@@ -2096,7 +2166,7 @@ public class BlueIceMiner extends Module {
             error("getting air");
             return;
         }
-        int blueIceInRange = countDroppedBlueIce(mc.player, 10);
+        int blueIceInRange = countDroppedItem(mc.player, 10, Items.BLUE_ICE);
         if (blueIceInRange > 60 || wasGathering) {
             if (!wasGathering) {
                 mc.options.attackKey.setPressed(false);
@@ -2142,7 +2212,7 @@ public class BlueIceMiner extends Module {
                 if (mc.player.getY() < slice_minY) {
                     wasTowering = true;
                     mc.options.sneakKey.setPressed(false);
-                    mc.options.forwardKey.setPressed(false);
+                    centerPlayer();
                     if (isAirOrWater(mc.player.getBlockPos().up(2))) {
                         mc.player.setPitch(90.0f);
                         mc.options.jumpKey.setPressed(true);
@@ -2260,6 +2330,7 @@ public class BlueIceMiner extends Module {
             );
         }
         if (conditions.get(0)) {
+            error("mining block in front of portal");
             switch (getPlayerDirection()) {
                 case NORTH, SOUTH -> {
                     if (!mc.world.getBlockState(target.east(1)).isAir()) {
@@ -2271,13 +2342,15 @@ public class BlueIceMiner extends Module {
                         packetMine(target.south(1));
                     }
                 }
-            };
+            }
             //place the block
         } else if (conditions.get(1)) {
+            error("mining block of portal");
             if (!mc.world.getBlockState(target).isAir() && mc.world.getBlockState(target).getBlock() != Blocks.OBSIDIAN) {
                 packetMine(target);
             }
         } else if (conditions.get(2)) {
+            error("placing obsidian of portal");
             mc.options.attackKey.setPressed(false);
             if (placeObby) {
                 if (mc.world.getBlockState(target).getBlock() != Blocks.OBSIDIAN) {
@@ -2324,6 +2397,7 @@ public class BlueIceMiner extends Module {
         retrieveItem = item;
         retrieveType = type;
         if (type > 2) {retrieveType = 0;}
+        shouldEnableIceHighwayBuilder = true;
     }
     private @NotNull BlockPos getBlockPos() {
         int offset = 0;
