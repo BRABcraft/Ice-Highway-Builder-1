@@ -23,6 +23,8 @@ import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
+import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import K_K_L_L.IceRail.addon.IceRail;
 import org.jetbrains.annotations.Nullable;
@@ -42,6 +44,7 @@ public class IceRailNuker extends Module {
     private final MinecraftClient mc = MinecraftClient.getInstance();
     static boolean isBreaking;
     static boolean isBreakingHardBlock;
+    int tick = 0;
 
     IceHighwayBuilder iceHighwayBuilder = Modules.get().get(IceHighwayBuilder.class);
     Setting<Integer> delay = iceHighwayBuilder.nukerDelay;
@@ -54,6 +57,8 @@ public class IceRailNuker extends Module {
     Setting<ShapeMode> shapeModeBreak = iceHighwayBuilder.shapeModeBreak;
     Setting<SettingColor> sideColor = iceHighwayBuilder.sideColor;
     Setting<SettingColor> lineColor = iceHighwayBuilder.lineColor;
+    Setting<Boolean> loweringFloor = iceHighwayBuilder.loweringFloor;
+    Setting<Boolean> packetMine = iceHighwayBuilder.nukerPacketMine;
 
     private final List<BlockPos> blocks = new ArrayList<>();
     private boolean firstBlock;
@@ -64,16 +69,9 @@ public class IceRailNuker extends Module {
     public static boolean getIsBreaking() {
         return isBreaking;
     }
-    public static boolean getIsBreakingHardBlock() {
-        return isBreaking && isBreakingHardBlock;
-    }
 
     public static void setIsBreaking(boolean value) {
         isBreaking = value;
-    }
-
-    public static void setIsBreakingHardBlock(boolean value) {
-        isBreakingHardBlock = value;
     }
 
 
@@ -83,14 +81,25 @@ public class IceRailNuker extends Module {
 
     private BlockPos getRegion1Start() {
         if (mc.player == null) return null;
-
-        return switch (getPlayerDirection()) {
-            case NORTH -> new BlockPos(playerX + 1, playerY, mc.player.getBlockZ() + 2 - Math.abs(mc.player.getBlockZ()) % 2);
-            case SOUTH -> new BlockPos(playerX + 1, playerY, mc.player.getBlockZ() - 2 + Math.abs(mc.player.getBlockZ()) % 2);
-            case EAST -> new BlockPos(mc.player.getBlockX() + 2 - Math.abs(mc.player.getBlockX()) % 2, playerY, playerZ - 1);
-            case WEST -> new BlockPos(mc.player.getBlockX() - 2 + Math.abs(mc.player.getBlockX()) % 2, playerY, playerZ - 1);
-            default -> new BlockPos(0, 64, 0); // This shouldn't happen
-        };
+        int Z = mc.player.getBlockZ();
+        int X = mc.player.getBlockX();
+        if (!loweringFloor.get()) {
+            return switch (getPlayerDirection()) {
+                case NORTH -> new BlockPos(playerX + 1, playerY,  Z + 2 - Math.abs(Z) % 2);
+                case SOUTH -> new BlockPos(playerX + 1, playerY, Z - 2 + Math.abs(Z) % 2);
+                case EAST -> new BlockPos(X + 2 - Math.abs(X) % 2, playerY, playerZ - 1);
+                case WEST -> new BlockPos(X - 2 + Math.abs(X) % 2, playerY, playerZ - 1);
+                default -> new BlockPos(0, 64, 0); // This shouldn't happen
+            };
+        } else {
+            return switch (getPlayerDirection()) {
+                case NORTH -> new BlockPos(playerX + 1, playerY,  Z + 3);
+                case SOUTH -> new BlockPos(playerX + 1, playerY, Z - 3);
+                case EAST -> new BlockPos(X + 3, playerY, playerZ - 1);
+                case WEST -> new BlockPos(X - 3, playerY, playerZ - 1);
+                default -> new BlockPos(0, 64, 0); // This shouldn't happen
+            };
+        }
     }
 
     private BlockPos getRegion1End() {
@@ -128,11 +137,14 @@ public class IceRailNuker extends Module {
         firstBlock = true;
         timer = 0;
         noBlockTimer = 0;
+        tick = 0;
     }
 
     @EventHandler
     private void onTickPre(TickEvent.Pre event) {
-        if (!isActive()) return;
+        tick++;
+        //if (tick % 2 == 0) { return; }
+        //if (!isActive()) return;
         if (playerX == null || playerY == null || playerZ == null) return;
         if (isGoingToHighway || getIsEating()) return;
 
@@ -143,8 +155,6 @@ public class IceRailNuker extends Module {
 
         if (mc.player == null) return;
         if (getPlayerDirection() == null) return;
-
-        if (!isBreaking) mc.options.attackKey.setPressed(false);
 
         BlockPos pos1 = getRegion1Start();
         BlockPos pos2 = getRegion1End();
@@ -205,7 +215,7 @@ public class IceRailNuker extends Module {
             if (count >= 4 && block.getY() > 115) break;
 
             boolean canInstaMine = BlockUtils.canInstaBreak(block);
-            mc.options.attackKey.setPressed(!mc.world.isAir(block) && !canInstaMine);
+            Block blockType = mc.world.getBlockState(block).getBlock();
             breakBlock(block);
 
 //            if (rotate.get()) {
@@ -227,19 +237,19 @@ public class IceRailNuker extends Module {
 
     private void breakBlock(BlockPos blockPos) {
         assert mc.world != null;
+        assert mc.player != null;
+        boolean isNetherrack = mc.world.getBlockState(blockPos).getBlock() == Blocks.NETHERRACK;
+        if (!isNetherrack) return;
         if (mc.world.isAir(blockPos)) return;
         if (blockPos == null) return;
-        Block block = mc.world.getBlockState(blockPos).getBlock();
-        boolean isBreakingNetherrack = block == Blocks.NETHERRACK || block == Blocks.FIRE || block == Blocks.SOUL_FIRE;
-        setIsBreakingHardBlock(isBreakingNetherrack);
         setIsBreaking(true);
-
-        if (isBreakingNetherrack) {
-            error("broke netherrack");
+        switchToBestTool(blockPos);
+        if (!packetMine.get()) {
             BlockUtils.breakBlock(blockPos, true);
         } else {
-            switchToBestTool(blockPos);
-            lookAtBlock(blockPos);
+            mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK, blockPos, BlockUtils.getDirection(blockPos)));
+            mc.player.swingHand(Hand.MAIN_HAND);
+            mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK, blockPos, BlockUtils.getDirection(blockPos)));
         }
     }
 
@@ -251,11 +261,6 @@ public class IceRailNuker extends Module {
     public enum ListMode {
         Whitelist,
         Blacklist
-    }
-
-    @Override
-    public void onDeactivate() {
-        mc.options.attackKey.setPressed(false);
     }
 }
  

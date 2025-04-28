@@ -37,7 +37,6 @@ import org.jetbrains.annotations.NotNull;
 import java.util.*;
 
 import static K_K_L_L.IceRail.addon.modules.IceRailAutoReplenish.*;
-import static K_K_L_L.IceRail.addon.modules.IceRailNuker.getIsBreakingHardBlock;
 import static meteordevelopment.meteorclient.utils.world.BlockUtils.getPlaceSide;
 
 public class IceHighwayBuilder extends Module {
@@ -99,6 +98,7 @@ public class IceHighwayBuilder extends Module {
     private final SettingGroup sgAutoEat = settings.createGroup("Auto Eat");
     private final SettingGroup sgInventory = settings.createGroup("Inventory Management");
     private final SettingGroup sgIceRailNuker = settings.createGroup("Ice Rail Nuker");
+    private final SettingGroup sgIcePlacer = settings.createGroup("IcePlacer");
 
     //Module Enabling settings
     private final Setting<Boolean> enableBlueIceMiner = sgEnable.add(new BoolSetting.Builder()
@@ -325,6 +325,24 @@ public class IceHighwayBuilder extends Module {
             .description("The line color of the target block rendering.")
             .defaultValue(new SettingColor(255, 0, 0, 255))
             .visible(nukerEnableRenderBreaking::get)
+            .build()
+    );
+    public final Setting<Boolean> loweringFloor = sgIceRailNuker.add(new BoolSetting.Builder()
+            .name("lowering-floor")
+            .description("Optimize for floor lowering (obsolete once +X and -Z are finished).")
+            .defaultValue(true)
+            .build()
+    );
+    public final Setting<Boolean> airPlaceBlueIce = sgIcePlacer.add(new BoolSetting.Builder()
+            .name("air-place-blue-ice")
+            .description("Uses airplace for blue ice (works best when nuker is active).")
+            .defaultValue(false)
+            .build()
+    );
+    public final Setting<Boolean> nukerPacketMine = sgIceRailNuker.add(new BoolSetting.Builder()
+            .name("packet-mine")
+            .description("Attempt to instamine everything at once.")
+            .defaultValue(false)
             .build()
     );
 
@@ -885,9 +903,17 @@ public class IceHighwayBuilder extends Module {
 
         lockRotation();
 
-        toggleIcePlacerAndNuker(!getIsEating());
+        if (icePlacer.isActive()) { // Toggle off
+            icePlacer.toggle();
+            iceRailNuker.toggle();
+        } else {
+            if (!getIsEating()) { // Toggle on
+                icePlacer.toggle();
+                iceRailNuker.toggle();
+            }
+        }
 
-        walkForward = !getIsEating() && !getIsBreakingHardBlock();
+        walkForward = !getIsEating();
 
         if (needsToScaffold()) {
             boolean isAirInFront = false;
@@ -910,7 +936,7 @@ public class IceHighwayBuilder extends Module {
             if (isAirInFront)
                 walkForward = false;
         } else
-            walkForward = !getIsEating() && !getIsBreakingHardBlock();
+            walkForward = !getIsEating();
 
         if (!walkForward) {
             setKeyPressed(mc.options.forwardKey, false);
@@ -1109,7 +1135,6 @@ public class IceHighwayBuilder extends Module {
         assert mc.player != null;
         mc.player.setPitch(0);
 
-        if (getIsBreakingHardBlock()) return;
         Direction direction = getPlayerDirection();
 
         switch (direction) {

@@ -748,6 +748,7 @@ public class BlueIceMiner extends Module {
         mc.player.setYaw((float) Rotations.getYaw(targetLocation));
         mc.player.setPitch((float) Rotations.getPitch(targetLocation));
         mc.options.forwardKey.setPressed(true);
+        mc.options.rightKey.setPressed(true);
         mc.options.sneakKey.setPressed(false);
         return true;
     }

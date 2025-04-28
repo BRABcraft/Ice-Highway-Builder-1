@@ -1,7 +1,9 @@
 package K_K_L_L.IceRail.addon.modules;
 
 import meteordevelopment.meteorclient.events.world.TickEvent;
+import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.systems.modules.Module;
+import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.meteorclient.utils.world.BlockUtils;
 import meteordevelopment.orbit.EventHandler;
@@ -18,8 +20,6 @@ import static K_K_L_L.IceRail.addon.Utils.switchToItem;
 import static K_K_L_L.IceRail.addon.modules.IceHighwayBuilder.*;
 import static K_K_L_L.IceRail.addon.modules.IceRailAutoEat.getIsEating;
 import static K_K_L_L.IceRail.addon.modules.IceRailNuker.getIsBreaking;
-import static K_K_L_L.IceRail.addon.modules.IceRailNuker.getIsBreakingHardBlock;
-import static meteordevelopment.meteorclient.utils.world.BlockUtils.getPlaceSide;
 
 public class IcePlacer extends Module {
     public IcePlacer() {
@@ -27,6 +27,10 @@ public class IcePlacer extends Module {
     }
     int tick = 0;
     public static BlockPos targetPos;
+
+    IceHighwayBuilder iceHighwayBuilder = Modules.get().get(IceHighwayBuilder.class);
+    Setting<Boolean> airPlaceBlueIce = iceHighwayBuilder.airPlaceBlueIce;
+
     private boolean place(Item item, BlockPos blockPos, boolean onlyOnLava) {
         assert mc.world != null;
         boolean condition = onlyOnLava ? !mc.world.getBlockState(blockPos).getFluidState().isEmpty() : mc.world.isAir(blockPos);
@@ -46,10 +50,9 @@ public class IcePlacer extends Module {
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
-        if (!isActive()) return;
         if (mc.player == null || mc.world == null) return;
         tick++;
-        if (tick % 3 < 2) return;
+        //if (tick % 3 < 2) return;
         playerX = mc.player.getBlockX();
         playerY = mc.player.getBlockY();
         playerZ = mc.player.getBlockZ();
@@ -97,16 +100,20 @@ public class IcePlacer extends Module {
                 return;
             }
         }
-        if (getIsBreaking() || getIsBreakingHardBlock()) return;
+        //if (getIsBreaking()) return;
         if (place(Items.NETHERRACK, guardrail1, false)) return;
         if (place(Items.NETHERRACK, guardrail2, false)) return;
         if (place(Items.NETHERRACK, guardrail1.up(-1), true)) return;
         if (place(Items.NETHERRACK, guardrail2.up(-1), true)) return;
         if (shouldPlace) {
             if (place(Items.NETHERRACK, targetPos2, false)) return;
-            switchToItem(Items.BLUE_ICE);
-            BlockUtils.place(targetPos, InvUtils.findInHotbar(itemStack ->
-                    itemStack.getItem() == Items.BLUE_ICE), false, 0, true, true);
+            if (airPlaceBlueIce.get()) {
+                place(Items.BLUE_ICE, targetPos, false);
+            } else {
+                if (mc.world.isAir(targetPos)) switchToItem(Items.BLUE_ICE);
+                BlockUtils.place(targetPos, InvUtils.findInHotbar(itemStack ->
+                        itemStack.getItem() == Items.BLUE_ICE), false, 0, true, true);
+            }
         }
     }
 }
