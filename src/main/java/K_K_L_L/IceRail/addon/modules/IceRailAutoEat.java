@@ -38,7 +38,6 @@ import java.util.Objects;
 import java.util.function.BiPredicate;
 
 import static K_K_L_L.IceRail.addon.modules.IceHighwayBuilder.needsToScaffold;
-import static K_K_L_L.IceRail.addon.modules.IceRailNuker.getIsBreaking;
 
 public class IceRailAutoEat extends Module {
     private static final Class<? extends Module>[] AURAS = new Class[]{KillAura.class, CrystalAura.class, AnchorAura.class, BedAura.class};
@@ -225,7 +224,6 @@ public class IceRailAutoEat extends Module {
 
         // Normal food eating logic
         if (mc.player.getHungerManager().getFoodLevel() >= 20 && item != Items.ENCHANTED_GOLDEN_APPLE) return;
-        if (getIsBreaking()) return;
 
         changeSlot(slot);
         setPressed(true);
@@ -270,7 +268,7 @@ public class IceRailAutoEat extends Module {
     }
 
     private boolean shouldEat() {
-        assert mc.player != null;
+        if (mc.player == null) return false;
         boolean health = mc.player.getHealth() <= healthThreshold.get();
         boolean hunger = mc.player.getHungerManager().getFoodLevel() <= hungerThreshold.get();
         boolean isBurning = mc.player.isOnFire();

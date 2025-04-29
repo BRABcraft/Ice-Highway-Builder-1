@@ -144,7 +144,8 @@ public class IceRailNuker extends Module {
     private void onTickPre(TickEvent.Pre event) {
         tick++;
         //if (tick % 2 == 0) { return; }
-        //if (!isActive()) return;
+        IceHighwayBuilder IceHighwayBuilder = Modules.get().get(IceHighwayBuilder.class);
+        if (!IceHighwayBuilder.isActive()) return;
         if (playerX == null || playerY == null || playerZ == null) return;
         if (isGoingToHighway || getIsEating()) return;
 
@@ -238,8 +239,6 @@ public class IceRailNuker extends Module {
     private void breakBlock(BlockPos blockPos) {
         assert mc.world != null;
         assert mc.player != null;
-        boolean isNetherrack = mc.world.getBlockState(blockPos).getBlock() == Blocks.NETHERRACK;
-        if (!isNetherrack) return;
         if (mc.world.isAir(blockPos)) return;
         if (blockPos == null) return;
         setIsBreaking(true);

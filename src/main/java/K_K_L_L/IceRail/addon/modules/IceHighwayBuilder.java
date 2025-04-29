@@ -264,7 +264,7 @@ public class IceHighwayBuilder extends Module {
     public final Setting<IceRailNuker.ListMode> nukerListMode = sgIceRailNuker.add(new EnumSetting.Builder<IceRailNuker.ListMode>()
             .name("list-mode")
             .description("Selection mode.")
-            .defaultValue(IceRailNuker.ListMode.Blacklist)
+            .defaultValue(IceRailNuker.ListMode.Whitelist)
             .build()
     );
 
@@ -293,6 +293,7 @@ public class IceHighwayBuilder extends Module {
     public final Setting<List<Block>> nukerWhitelist = sgIceRailNuker.add(new BlockListSetting.Builder()
             .name("whitelist")
             .description("The blocks you want to mine.")
+            .defaultValue(Blocks.NETHERRACK)
             .visible(() -> nukerListMode.get() == IceRailNuker.ListMode.Whitelist)
             .build()
     );
@@ -601,11 +602,12 @@ public class IceHighwayBuilder extends Module {
 
     private void dropSlot(int slot3) {
         assert mc.player != null;
-        if (!throwBlacklist.get().contains(mc.player.getInventory().getStack(slot3).getItem())) {
+        ItemStack itemStack = mc.player.getInventory().getStack(slot3);
+        if (!throwBlacklist.get().contains(itemStack.getItem())) {
             InvUtils.drop().slot(slot3);
         } else {
             for (int j = 9; j < 36; j++) {
-                if (!throwBlacklist.get().contains(mc.player.getInventory().getStack(slot3).getItem())) {
+                if (itemStack.isEmpty() || throwBlacklist.get().contains(itemStack.getItem())) {
                     InvUtils.quickSwap().fromId(slot3).toId(j);
                     break;
                 }
@@ -797,7 +799,12 @@ public class IceHighwayBuilder extends Module {
         }
         placeTickCounter++;
 
-        mc.options.backKey.setPressed(placeTickCounter < 20 && placeTickCounter % 10 < 4);
+        boolean pressBacktrackKeys = placeTickCounter < 20 && placeTickCounter % 10 < 4;
+        mc.options.backKey.setPressed(pressBacktrackKeys);
+        switch(highway.get()) {
+            case East, North -> mc.options.rightKey.setPressed(pressBacktrackKeys);
+            case West, South -> mc.options.leftKey.setPressed(pressBacktrackKeys);
+        }
 
         if (isPostRestocking) {
             toggleIcePlacerAndNuker(false);
@@ -849,7 +856,16 @@ public class IceHighwayBuilder extends Module {
             slotNumber = 0;
             stealingDelay = 0;
             // Initiate inventory clear
-            oldYaw = mc.player.getYaw();
+            oldYaw = switch(highway.get()) {
+                case East -> -90;
+                case West -> 90;
+                case South -> 0;
+                case North -> 180;
+                case Southeast -> -45;
+                case Southwest -> 45;
+                case Northeast -> -135;
+                case Northwest -> 135;
+            };
             isClearingInventory = true;
             return;
         }
@@ -881,6 +897,7 @@ public class IceHighwayBuilder extends Module {
                         ((BlockItem) stack.getItem()).getBlock() instanceof ShulkerBoxBlock) {
                     if (hasPicksInShulker(stack)) {
                         if (i > 8) {
+                            error("quickSwapped 898");
                             InvUtils.quickSwap().fromId(shulkerSlot).toId(i);
                             swapSlot = shulkerSlot;
                         } else {

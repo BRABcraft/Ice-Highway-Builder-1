@@ -8,6 +8,7 @@ import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.meteorclient.utils.world.BlockUtils;
 import meteordevelopment.orbit.EventHandler;
 import K_K_L_L.IceRail.addon.IceRail;
+import net.minecraft.block.Blocks;
 import net.minecraft.item.Item;
 import net.minecraft.item.Items;
 import net.minecraft.util.math.BlockPos;
@@ -19,7 +20,6 @@ import static K_K_L_L.IceRail.addon.Utils.airPlace;
 import static K_K_L_L.IceRail.addon.Utils.switchToItem;
 import static K_K_L_L.IceRail.addon.modules.IceHighwayBuilder.*;
 import static K_K_L_L.IceRail.addon.modules.IceRailAutoEat.getIsEating;
-import static K_K_L_L.IceRail.addon.modules.IceRailNuker.getIsBreaking;
 
 public class IcePlacer extends Module {
     public IcePlacer() {
@@ -48,11 +48,34 @@ public class IcePlacer extends Module {
         return false;
     }
 
+    private boolean sourceRemover() {
+        assert mc.player != null;
+        assert mc.world != null;
+        int X = mc.player.getBlockX();
+        int Y = mc.player.getBlockY();
+        int Z = mc.player.getBlockZ();
+        for (int x = X - 2; x <= X + 1; x++) {
+            for (int y = Y - 1; y <= Y + 4; y++) {
+                for (int z = Z - 2; z <= Z + 2; z++) {
+                    BlockPos block = new BlockPos(x, y, z);
+                    if (mc.world.getBlockState(block).getBlock() == Blocks.LAVA) {
+                        switchToItem(Items.NETHERRACK);
+                        airPlace(block, Direction.DOWN);
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         if (mc.player == null || mc.world == null) return;
         tick++;
         //if (tick % 3 < 2) return;
+        IceHighwayBuilder IceHighwayBuilder = Modules.get().get(IceHighwayBuilder.class);
+        if (!IceHighwayBuilder.isActive()) return;
         playerX = mc.player.getBlockX();
         playerY = mc.player.getBlockY();
         playerZ = mc.player.getBlockZ();
@@ -100,7 +123,7 @@ public class IcePlacer extends Module {
                 return;
             }
         }
-        //if (getIsBreaking()) return;
+        if (sourceRemover()) return;
         if (place(Items.NETHERRACK, guardrail1, false)) return;
         if (place(Items.NETHERRACK, guardrail2, false)) return;
         if (place(Items.NETHERRACK, guardrail1.up(-1), true)) return;

@@ -114,9 +114,7 @@ public class ScaffoldGrim extends Module {
             if (mc.getNetworkHandler() == null) return;
             assert mc.world != null;
             if (mc.world.getBlockState(targetPos).getBlock() == Blocks.SOUL_SAND) {
-                mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK, targetPos, BlockUtils.getDirection(targetPos)));
-                mc.player.swingHand(Hand.MAIN_HAND);
-                mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK, targetPos, BlockUtils.getDirection(targetPos)));
+                BlockUtils.breakBlock(targetPos, true);
             }
             if (mc.world.getBlockState(targetPos).isAir()) {
                 //InvUtils.swap(InvUtils.findInHotbar(itemStack -> itemStack.getItem() == Items.NETHERRACK).slot(), false);

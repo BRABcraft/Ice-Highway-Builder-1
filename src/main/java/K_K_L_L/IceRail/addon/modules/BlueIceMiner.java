@@ -1541,17 +1541,19 @@ public class BlueIceMiner extends Module {
         assert mc.world != null;
         assert (getPlayerDirection() != null);
 
+        IceHighwayBuilder IceHighwayBuilder = Modules.get().get(IceHighwayBuilder.class);
+        Direction direction = IceHighwayBuilder.getPlayerCurrentDirection();
         int goalOff = 0;
-        boolean test = true;
+        boolean test;
         boolean inOverworld = mc.world.getDimension().bedWorks();
         if (!inOverworld) {
             goalOff = -210;
-            test = switch (getPlayerDirection()) {
+            test = switch (direction) {
                 case NORTH, SOUTH -> mc.player.getBlockX() != goalOff;
                 case EAST, WEST -> mc.player.getBlockZ() != goalOff;
                 default -> false;
             };
-            switch (getPlayerDirection()) {
+            switch (direction) {
                 case NORTH, SOUTH -> {
                     if (mc.player.getBlockX() > goalOff + 2) {
                         reached = false;
@@ -1562,9 +1564,7 @@ public class BlueIceMiner extends Module {
                         reached = false;
                     }
                 }
-                default -> {
-                    reached = false;
-                }
+                default -> reached = false;
             }
         } else {
             test = mc.player.getBlockY() < 63;
@@ -1573,7 +1573,7 @@ public class BlueIceMiner extends Module {
         if (test && !reached) {
             if (!inOverworld) {
                 portalOriginBlock = null;
-                BlockPos goal = switch (getPlayerDirection()) {
+                BlockPos goal = switch (direction) {
                     case NORTH, SOUTH -> new BlockPos(goalOff, 114, mc.player.getBlockZ());
                     case EAST, WEST -> new BlockPos(mc.player.getBlockX(), 114, goalOff);
                     default -> new BlockPos(0, 0, 0); // This shouldn't happen.
@@ -1592,15 +1592,10 @@ public class BlueIceMiner extends Module {
             isPathing = true;
             //only generate a new portal location if it is null
             if (portalOriginBlock == null) {
-                switch (getPlayerDirection()) {
-                    case NORTH, SOUTH -> {
-                        portalOriginBlock = mc.player.getBlockPos().east(-1);
-                    }
-                    case EAST, WEST -> {
-                        portalOriginBlock = mc.player.getBlockPos().south(-1);
-                    }
+                switch (direction) {
+                    case NORTH, SOUTH -> portalOriginBlock = mc.player.getBlockPos().east(-1);
+                    case EAST, WEST -> portalOriginBlock = mc.player.getBlockPos().south(-1);
                 }
-                ;
             }
             error(String.valueOf(portalOriginBlock));
             ArrayList<Integer> offset = new ArrayList<>(Arrays.asList(
@@ -1614,7 +1609,7 @@ public class BlueIceMiner extends Module {
             portalBlocks = new ArrayList<>();
             assert portalOriginBlock != null;
             for (int i = 0; i < 20; i++) {
-                switch (getPlayerDirection()) {
+                switch (direction) {
                     case NORTH, SOUTH -> portalBlocks.add(portalOriginBlock.south(offset.get(i * 2)).up(offset.get(i * 2 + 1)));
                     case EAST, WEST -> portalBlocks.add(portalOriginBlock.east(offset.get(i * 2)).up(offset.get(i * 2 + 1)));
                 }
@@ -1775,6 +1770,7 @@ public class BlueIceMiner extends Module {
 
         //If player is safely out of the portal, dump FLINT AND STEEL and OBSIDIAN into a shulker
         if (dump(List.of(Items.FLINT_AND_STEEL, Items.OBSIDIAN, Items.NETHERRACK))) {
+            error("dumped flint and steel, obby, and netherrack");
             return;
         }
 
@@ -1896,36 +1892,40 @@ public class BlueIceMiner extends Module {
             error("mine_AndGatherShulk 1782");
             return mineAndGatherShulk();
         }
-
-        int shulkerTarget = -1;
-        for (int i = 0; i < 36; i++) {
-            ItemStack itemStack = mc.player.getInventory().getStack(i);
-            if (itemStack.getItem() instanceof BlockItem &&
-                    ((BlockItem) itemStack.getItem()).getBlock() instanceof ShulkerBoxBlock) {
-                ItemStack[] containerItems = new ItemStack[27];
-                Utils.getItemsInContainerItem(itemStack, containerItems);
-                for (ItemStack stack : containerItems) {
-                    if (stack.isEmpty()) {
-                        shulkerTarget = i;
-                        break;
+        if (mc.player.currentScreenHandler == mc.player.playerScreenHandler) {
+            int shulkerTarget = -1;
+            for (int i = 0; i < 36; i++) {
+                ItemStack itemStack = mc.player.getInventory().getStack(i);
+                if (itemStack.getItem() instanceof BlockItem &&
+                        ((BlockItem) itemStack.getItem()).getBlock() instanceof ShulkerBoxBlock) {
+                    ItemStack[] containerItems = new ItemStack[27];
+                    Utils.getItemsInContainerItem(itemStack, containerItems);
+                    for (ItemStack stack : containerItems) {
+                        if (stack.isEmpty()) {
+                            shulkerTarget = i;
+                            if (shulkerTarget > 8) {
+                                error("1907");
+                                InvUtils.quickSwap().fromId(shulkerSlot).toId(shulkerTarget);
+                                shulkerTarget = shulkerSlot;
+                            }
+                            break;
+                        }
                     }
                 }
+                if (shulkerTarget != -1) break;
+            }
+            if (mc.player.getInventory().selectedSlot != shulkerTarget) {
+                InvUtils.swap(shulkerTarget, false);
+                return true;
             }
         }
-
-        assert shulkerTarget != -1;
-        if (shulkerTarget > 8) {
-            InvUtils.quickSwap().fromId(shulkerSlot).toId(shulkerTarget);
+        if (placeShulkUnderFeet()) {
+            error("1917");
             return true;
         }
-        if (mc.player.getInventory().selectedSlot != shulkerTarget) {
-            InvUtils.swap(shulkerTarget, false);
-            return true;
-        }
-        if (placeShulkUnderFeet()) return true;
-
         if (mc.player.currentScreenHandler == mc.player.playerScreenHandler) {
             openShulker();
+            error("1922");
             return true;
         }
 
