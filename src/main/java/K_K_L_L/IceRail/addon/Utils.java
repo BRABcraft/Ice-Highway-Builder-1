@@ -67,13 +67,17 @@ public class Utils {
         }
     }
 
+    public static int getSlotOffset() {
+        assert mc.player != null;
+        return (mc.player.currentScreenHandler == mc.player.playerScreenHandler) ? 0 : 27;
+    }
+
     public static int countUsablePickaxes() {
         int count = 0;
 
         if (mc.player == null) return count;
-
         // Check main inventory
-        for (int i = 0; i < mc.player.getInventory().main.size(); i++) {
+        for (int i = getSlotOffset(); i < getSlotOffset() + 36; i++) {
             ItemStack itemStack = mc.player.getInventory().getStack(i);
 
             if (itemStack.getItem() instanceof PickaxeItem) {

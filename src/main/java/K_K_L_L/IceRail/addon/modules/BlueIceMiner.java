@@ -29,6 +29,7 @@ import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.ShulkerBoxBlock;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.ingame.ShulkerBoxScreen;
 import net.minecraft.client.option.GameOptions;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.ItemEntity;
@@ -45,6 +46,7 @@ import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.screen.GenericContainerScreenHandler;
 import net.minecraft.screen.ScreenHandler;
+import net.minecraft.screen.ShulkerBoxScreenHandler;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
@@ -116,6 +118,7 @@ public class BlueIceMiner extends Module {
     public boolean wasPathingToTridentDrowned = false;
     public BlockPos returnCoords;
     public static boolean shouldEnableIceHighwayBuilder = false;
+    public boolean isDumping = false;
 
     MinecraftClient mc = MinecraftClient.getInstance();
 
@@ -453,6 +456,8 @@ public class BlueIceMiner extends Module {
         assert mc.world != null;
         assert mc.player != null;
         assert mc.interactionManager != null;
+
+        if (!hasFoundFrozenOcean) return false;
 
         mc.options.attackKey.setPressed(false);
         mc.options.sneakKey.setPressed(false);
@@ -866,8 +871,8 @@ public class BlueIceMiner extends Module {
         if (mc.world.getBlockState(shulkerBlockPos).getBlock() instanceof ShulkerBoxBlock) {
             if (PlayerUtils.isWithinReach(shulkerBlockPos)) {
                 swapToPickaxe();
-                if (BlockUtils.breakBlock(shulkerBlockPos, true))
-                    return true;
+                BlockUtils.breakBlock(shulkerBlockPos, true);
+                return true;
             }
         }
         Item[] items = getShulkerBoxesNearby();
@@ -888,12 +893,16 @@ public class BlueIceMiner extends Module {
         assert mc.player != null;
         assert mc.world != null;
         BlockPos block = mc.player.getBlockPos().down();
+        //if (mc.player.currentScreenHandler != mc.player.playerScreenHandler) return false;
         boolean blockIsShulker = mc.world.getBlockState(block).getBlock() instanceof ShulkerBoxBlock;
+        error("894" + mc.world.getBlockState(block).getBlock());
         if (!blockIsShulker) {
             mc.options.jumpKey.setPressed(true);
-            if (!BlockUtils.canPlace(block, true)) {
-                return true;
-            }
+//            if (!BlockUtils.canPlace(block, true)) {
+//                error("cannot place");
+//                return true;
+//            }
+            mc.player.setPitch(90.0f);
             place(block, Hand.MAIN_HAND, shulkerSlot, true, true, true);
             hasOpenedShulker = false;
             shulkerBlockPos = block;
@@ -1882,79 +1891,124 @@ public class BlueIceMiner extends Module {
 
         boolean hasItems = false;
         for (int i = 0; i < 36; i++) {
-            Item item = mc.player.getInventory().getStack(i).getItem();
-            if (targetItems.contains(item)) {
-                hasItems = true;
-            }
-        }
-
-        if (!hasItems || full) {
-            error("mine_AndGatherShulk 1782");
-            return mineAndGatherShulk();
-        }
-        if (mc.player.currentScreenHandler == mc.player.playerScreenHandler) {
-            int shulkerTarget = -1;
-            for (int i = 0; i < 36; i++) {
-                ItemStack itemStack = mc.player.getInventory().getStack(i);
-                if (itemStack.getItem() instanceof BlockItem &&
-                        ((BlockItem) itemStack.getItem()).getBlock() instanceof ShulkerBoxBlock) {
-                    ItemStack[] containerItems = new ItemStack[27];
-                    Utils.getItemsInContainerItem(itemStack, containerItems);
-                    for (ItemStack stack : containerItems) {
-                        if (stack.isEmpty()) {
-                            shulkerTarget = i;
-                            if (shulkerTarget > 8) {
-                                error("1907");
-                                InvUtils.quickSwap().fromId(shulkerSlot).toId(shulkerTarget);
-                                shulkerTarget = shulkerSlot;
-                            }
-                            break;
-                        }
-                    }
-                }
-                if (shulkerTarget != -1) break;
-            }
-            if (mc.player.getInventory().selectedSlot != shulkerTarget) {
-                InvUtils.swap(shulkerTarget, false);
-                return true;
-            }
-        }
-        if (placeShulkUnderFeet()) {
-            error("1917");
-            return true;
-        }
-        if (mc.player.currentScreenHandler == mc.player.playerScreenHandler) {
-            openShulker();
-            error("1922");
-            return true;
-        }
-
-        if (tick % 2 == 0) return true;
-        for (int i = 0; i < 36; i++) {
             ItemStack itemStack = mc.player.getInventory().getStack(i);
             if (targetItems.contains(itemStack.getItem())) {
-                int toSlot = -1;
-                for (int j = 0; j < 27; j++) {
-                    if (mc.player.currentScreenHandler.getSlot(j).getStack().isEmpty()) {
-                        toSlot = j;
+                hasItems = true;
+            }
+            if (itemStack.getItem() instanceof BlockItem &&
+                    ((BlockItem) itemStack.getItem()).getBlock() instanceof ShulkerBoxBlock) {
+                ItemStack[] containerItems = new ItemStack[27];
+                Utils.getItemsInContainerItem(itemStack, containerItems);
+                boolean found = false;
+                for (ItemStack stack : containerItems) {
+                    if (stack.isEmpty()) {
+                        found = true;
+                        firstValidShulker = i;
                         break;
                     }
                 }
-                if (toSlot == -1) {
-                    full = true;
+                if (found) break;
+            }
+        }
+
+        if (isDumping) {
+            //Possible improvement: Use shiftClick() with an ID from 27-63 to dump into shulker.
+            cancelBaritone();
+            if (full || !hasItems) {
+                if (mineAndGatherShulk()) {
+                    error("mine_AndGatherShulk 1904");
                     return true;
-                } else {
-                    full = false;
                 }
-                if (tick % 4 == 1) {
-                    if (i < 9) {
-                        InvUtils.quickSwap().fromId(i).toId(toSlot);
-                    } else {
-                        InvUtils.move().from(i).to(toolSlot);
+                isDumping = false;
+                full = false;
+                error("9");
+                return true;
+            }
+            mc.options.attackKey.setPressed(false);
+
+            if (mc.player.currentScreenHandler == mc.player.playerScreenHandler) {
+                error("shulkerBlockPos = " + shulkerBlockPos);
+                openShulker();
+                error("8");
+                return true;
+            }
+
+            if (tick % 2 == 0) return true;
+            for (int i = 0; i < 36; i++) {
+                ItemStack itemStack = mc.player.getInventory().getStack(i);
+                if (targetItems.contains(itemStack.getItem())) {
+                    int toSlot = -1;
+                    for (int j = 0; j < 27; j++) {
+                        if (mc.player.currentScreenHandler.getSlot(j).getStack().isEmpty()) {
+                            toSlot = j;
+                            break;
+                        }
                     }
-                } else {
-                    InvUtils.quickSwap().fromId(toolSlot).toId(toSlot);
+                    if (toSlot == -1) {
+                        full = true;
+                        return true;
+                    }
+                    if (tick % 4 == 1) {
+                        if (i < 9) {
+                            InvUtils.quickSwap().fromId(i).toId(toSlot);
+                        } else {
+                            InvUtils.move().from(i).to(shulkerSlot);
+                            error("10: swapped from inventory to shulkerSlot");
+                        }
+                    } else {
+                        InvUtils.quickSwap().fromId(shulkerSlot).toId(toSlot);
+                    }
+                    error("10, fromSlot = " + i + " toSlot = " + toSlot);
+                    return true;
                 }
+            }
+            isDumping = false;
+            error("11");
+            return true;
+        } else {
+            if (hasItems) {
+                cancelBaritone();
+                error("cancelBaritone 466");
+                assert firstValidShulker != -1;
+                scanningWorld2 = true;
+                if (firstValidShulker != shulkerSlot) {
+                    if (firstValidShulker < 9 || firstValidShulker == 500) {
+                        if (firstValidShulker < 9) {
+                            InvUtils.quickSwap().fromId(firstValidShulker).toId(9);
+                            firstValidShulker = 500;
+                            error("1: swapped to 9");
+                            return true;
+                        }
+                        InvUtils.quickSwap().fromId(shulkerSlot).toId(9);
+                        error("1: swapped from 9");
+                    } else {
+                        InvUtils.quickSwap().fromId(shulkerSlot).toId(firstValidShulker);
+                    }
+                    error("1, firstValidShulker = " + firstValidShulker + " shulkerSlot = " + shulkerSlot);
+                    firstValidShulker = -1;
+                    return true;
+                }
+                if (mc.player.getInventory().selectedSlot != shulkerSlot) {
+                    error("2, current slot: " + mc.player.getInventory().selectedSlot);
+                    InvUtils.swap(shulkerSlot, false);
+                }
+                BlockPos block = mc.player.getBlockPos().down();
+                boolean blockIsShulker = mc.world.getBlockState(block).getBlock() instanceof ShulkerBoxBlock;
+                if (!blockIsShulker) {
+                    mc.options.jumpKey.setPressed(true);
+                    if (!BlockUtils.canPlace(block, true)) {
+                        error("3");
+                        return true;
+                    }
+                    place(block, Hand.MAIN_HAND, shulkerSlot, true, true, true);
+                }
+                isDumping = true;
+                hasOpenedShulker = false;
+                shulkerBlockPos = block;
+                foundBlock = false;
+                full = false;
+                error("4");
+                return true;
             }
         }
         return false;
@@ -2203,6 +2257,7 @@ public class BlueIceMiner extends Module {
                     mc.options.forwardKey.setPressed(false);
                 }
             } else {
+                if (slice.isEmpty()) return;
                 error("walking forwards to get more blue ice");
                 swapToPickaxe();
                 if (mineObstructingBlocks()) {
@@ -2416,11 +2471,8 @@ public class BlueIceMiner extends Module {
         mc.setScreen(null);
         // Open the shulker
         assert mc.player != null;
-        mc.player.networkHandler.sendPacket(new PlayerInteractBlockC2SPacket(Hand.MAIN_HAND,
-                new BlockHitResult(Vec3d.ofCenter(shulkerBlockPos), Direction.DOWN,
-                        shulkerBlockPos, false), 0));
-
-
+        mc.player.networkHandler.sendPacket(new PlayerInteractBlockC2SPacket(Hand.MAIN_HAND, new BlockHitResult(Vec3d.ofCenter(shulkerBlockPos), Direction.DOWN, shulkerBlockPos, false), 0));
+        //Utils.rightClick();
         mc.setScreen(null);
         hasOpenedShulker = true;
     }

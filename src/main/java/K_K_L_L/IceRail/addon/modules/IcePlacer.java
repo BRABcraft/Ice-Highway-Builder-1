@@ -79,7 +79,7 @@ public class IcePlacer extends Module {
         playerX = mc.player.getBlockX();
         playerY = mc.player.getBlockY();
         playerZ = mc.player.getBlockZ();
-        if (isGoingToHighway || getIsEating()) return;
+        if (isGoingToHighway || getIsEating() || mc.world.getDimension().bedWorks()) return;
 
         Direction direction = getPlayerDirection();
         if (direction == null) {

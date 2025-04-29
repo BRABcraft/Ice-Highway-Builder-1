@@ -147,7 +147,7 @@ public class IceRailNuker extends Module {
         IceHighwayBuilder IceHighwayBuilder = Modules.get().get(IceHighwayBuilder.class);
         if (!IceHighwayBuilder.isActive()) return;
         if (playerX == null || playerY == null || playerZ == null) return;
-        if (isGoingToHighway || getIsEating()) return;
+        if (isGoingToHighway || getIsEating() || mc.world.getDimension().bedWorks()) return;
 
         if (timer > 0) {
             timer--;
