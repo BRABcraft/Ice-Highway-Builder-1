@@ -77,7 +77,7 @@ public class Utils {
 
         if (mc.player == null) return count;
         // Check main inventory
-        for (int i = getSlotOffset(); i < getSlotOffset() + 36; i++) {
+        for (int i = 0; i < 36; i++) {
             ItemStack itemStack = mc.player.getInventory().getStack(i);
 
             if (itemStack.getItem() instanceof PickaxeItem) {

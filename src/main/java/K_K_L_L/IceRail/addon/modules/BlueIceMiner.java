@@ -525,7 +525,7 @@ public class BlueIceMiner extends Module {
                 return true;
             }
 
-            if (tick % 2 == 0) return true;
+            if (tick % 4 < 3) return true;
             for (int i = 0; i < 36; i++) {
                 ItemStack itemStack = mc.player.getInventory().getStack(i);
                 if (itemStack.getItem() == Items.BLUE_ICE) {
@@ -540,17 +540,20 @@ public class BlueIceMiner extends Module {
                         full = true;
                         return true;
                     }
-                    if (tick % 4 == 1) {
-                        if (i < 9) {
-                            InvUtils.quickSwap().fromId(i).toId(toSlot);
-                        } else {
-                            InvUtils.move().from(i).to(shulkerSlot);
-                            error("10: swapped from inventory to shulkerSlot");
-                        }
-                    } else {
-                        InvUtils.quickSwap().fromId(shulkerSlot).toId(toSlot);
-                    }
-                    error("10, fromSlot = " + i + " toSlot = " + toSlot);
+//                    if (tick % 4 == 1) {
+//                        if (i < 9) {
+//                            InvUtils.quickSwap().fromId(i).toId(toSlot);
+//                        } else {
+//                            InvUtils.move().from(i).to(shulkerSlot);
+//                            error("10: swapped from inventory to shulkerSlot");
+//                        }
+//                    } else {
+//                        InvUtils.quickSwap().fromId(shulkerSlot).toId(toSlot);
+//                    }
+                    error("10, i = " + i);
+                    int syncId = mc.player.currentScreenHandler.syncId;
+                    int handlerSlot = (i < 9) ? i + 54 : i + 18;
+                    mc.interactionManager.clickSlot(syncId, handlerSlot, 0, SlotActionType.QUICK_MOVE, mc.player);
                     return true;
                 }
             }
@@ -590,7 +593,8 @@ public class BlueIceMiner extends Module {
                         InvUtils.swap(shulkerSlot, false);
                     }
                     BlockPos block = mc.player.getBlockPos().down();
-                    boolean blockIsShulker = mc.world.getBlockState(block).getBlock() instanceof ShulkerBoxBlock;
+                    boolean blockIsShulker = mc.world.getBlockState(block).getBlock() instanceof ShulkerBoxBlock ||
+                            mc.world.getBlockState(block.down()).getBlock() instanceof ShulkerBoxBlock ;
                     if (!blockIsShulker) {
                         mc.options.jumpKey.setPressed(true);
                         if (!BlockUtils.canPlace(block, true)) {
@@ -894,7 +898,8 @@ public class BlueIceMiner extends Module {
         assert mc.world != null;
         BlockPos block = mc.player.getBlockPos().down();
         //if (mc.player.currentScreenHandler != mc.player.playerScreenHandler) return false;
-        boolean blockIsShulker = mc.world.getBlockState(block).getBlock() instanceof ShulkerBoxBlock;
+        boolean blockIsShulker = mc.world.getBlockState(block).getBlock() instanceof ShulkerBoxBlock ||
+                mc.world.getBlockState(block.down()).getBlock() instanceof ShulkerBoxBlock ;
         error("894" + mc.world.getBlockState(block).getBlock());
         if (!blockIsShulker) {
             mc.options.jumpKey.setPressed(true);
@@ -1215,7 +1220,8 @@ public class BlueIceMiner extends Module {
                             Blocks.GRAVEL,
                             Blocks.CLAY,
                             Blocks.SAND,
-                            Blocks.SNOW_BLOCK
+                            Blocks.SNOW_BLOCK,
+                            Blocks.MAGMA_BLOCK
                     );
                     if (PlayerUtils.isWithin(blockPos, 2) && obstructionBlocks.contains(block)) {
                         lookAtBlock(blockPos);
@@ -1783,8 +1789,8 @@ public class BlueIceMiner extends Module {
             return;
         }
 
-        //Every two seconds, scan for blue ice.
-        if (isInFrozenOcean && tick % 60 == 30) {
+        //Every second, scan for blue ice.
+        if (isInFrozenOcean && tick % 20 == 15) {
             scanningWorld = true;
         }
 
@@ -1888,6 +1894,7 @@ public class BlueIceMiner extends Module {
     private boolean dump(List<Item> targetItems) {
         assert mc.player != null;
         assert mc.world != null;
+        assert mc.interactionManager != null;
 
         boolean hasItems = false;
         for (int i = 0; i < 36; i++) {
@@ -1933,7 +1940,7 @@ public class BlueIceMiner extends Module {
                 return true;
             }
 
-            if (tick % 2 == 0) return true;
+            if (tick % 4 < 3) return true;
             for (int i = 0; i < 36; i++) {
                 ItemStack itemStack = mc.player.getInventory().getStack(i);
                 if (targetItems.contains(itemStack.getItem())) {
@@ -1948,17 +1955,20 @@ public class BlueIceMiner extends Module {
                         full = true;
                         return true;
                     }
-                    if (tick % 4 == 1) {
-                        if (i < 9) {
-                            InvUtils.quickSwap().fromId(i).toId(toSlot);
-                        } else {
-                            InvUtils.move().from(i).to(shulkerSlot);
-                            error("10: swapped from inventory to shulkerSlot");
-                        }
-                    } else {
-                        InvUtils.quickSwap().fromId(shulkerSlot).toId(toSlot);
-                    }
-                    error("10, fromSlot = " + i + " toSlot = " + toSlot);
+//                    if (tick % 4 == 1) {
+//                        if (i < 9) {
+//                            InvUtils.quickSwap().fromId(i).toId(toSlot);
+//                        } else {
+//                            InvUtils.move().from(i).to(shulkerSlot);
+//                            error("10: swapped from inventory to shulkerSlot");
+//                        }
+//                    } else {
+//                        InvUtils.quickSwap().fromId(shulkerSlot).toId(toSlot);
+//                    }
+                    int syncId = mc.player.currentScreenHandler.syncId;
+                    int handlerSlot = (i < 9) ? i + 54 : i + 18;
+                    mc.interactionManager.clickSlot(syncId, handlerSlot, 0, SlotActionType.QUICK_MOVE, mc.player);
+                    //error("10, fromSlot = " + i + " toSlot = " + toSlot);
                     return true;
                 }
             }
@@ -1993,7 +2003,8 @@ public class BlueIceMiner extends Module {
                     InvUtils.swap(shulkerSlot, false);
                 }
                 BlockPos block = mc.player.getBlockPos().down();
-                boolean blockIsShulker = mc.world.getBlockState(block).getBlock() instanceof ShulkerBoxBlock;
+                boolean blockIsShulker = mc.world.getBlockState(block).getBlock() instanceof ShulkerBoxBlock ||
+                        mc.world.getBlockState(block.down()).getBlock() instanceof ShulkerBoxBlock ;
                 if (!blockIsShulker) {
                     mc.options.jumpKey.setPressed(true);
                     if (!BlockUtils.canPlace(block, true)) {
@@ -2245,7 +2256,7 @@ public class BlueIceMiner extends Module {
             if (slice.isEmpty() && !wasTowering && !(mc.player.getY() < slice_minY)) {
                 if (tick % 80 == 0) getBlockGroups(Blocks.BLUE_ICE);
                 if (groups.size() > currentIceberg && (int) groups.get(currentIceberg + 1) > 0 && slice_minY > 46) {
-                    error("Decreasing slice_minY and slice_maxY");
+                    error("Updated slice Y range. Minimum Y: " + slice_minY + ", Maximum Y: " + slice_maxY);
                     slice_minY -= sliceHeight.get();
                     slice_maxY -= sliceHeight.get();
                 } else {
@@ -2298,11 +2309,11 @@ public class BlueIceMiner extends Module {
                 airPlace(Items.BLUE_ICE, mc.player.getBlockPos().up(-1), Direction.DOWN);
             }
         } else {
-            error("Mining. slice_minY: " + slice_minY + ", slice_maxY: " + slice_maxY + ", mining block: " + range.getFirst() + ", previous block: " + previousRangeFirst + ", mineDuration:" + mineDuration);
             BlockPos playerPos = mc.player.getBlockPos();
 
             if (previousRangeFirst == null || !previousRangeFirst.equals(range.getFirst())) {
                 if (mineDuration > 8 || previousRangeFirst == null) {
+                    error("Mined block at " + range.getFirst() + " for " + mineDuration + " ticks");
                     mineDuration = 0;
                     previousRangeFirst = range.getFirst();
                 } else {
