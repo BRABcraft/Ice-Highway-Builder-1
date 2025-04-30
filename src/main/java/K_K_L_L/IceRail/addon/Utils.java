@@ -20,6 +20,8 @@ import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.item.*;
 import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
+import net.minecraft.screen.ScreenHandler;
+import net.minecraft.screen.ShulkerBoxScreenHandler;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.*;
@@ -67,9 +69,13 @@ public class Utils {
         }
     }
 
-    public static int getSlotOffset() {
+    public static int convertToHandlerSlot(int slot) {
         assert mc.player != null;
-        return (mc.player.currentScreenHandler == mc.player.playerScreenHandler) ? 0 : 27;
+        ScreenHandler handler = mc.player.currentScreenHandler;
+        if (handler == mc.player.playerScreenHandler) return slot;
+        if (handler instanceof ShulkerBoxScreenHandler) return (slot < 9) ? slot + 54 : slot + 18;
+        if (mc.currentScreen instanceof InventoryScreen) return (slot < 9) ? slot + 18 : slot - 9;
+        return slot;
     }
 
     public static int countUsablePickaxes() {

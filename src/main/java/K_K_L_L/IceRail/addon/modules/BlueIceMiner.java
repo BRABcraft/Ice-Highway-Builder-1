@@ -119,6 +119,7 @@ public class BlueIceMiner extends Module {
     public BlockPos returnCoords;
     public static boolean shouldEnableIceHighwayBuilder = false;
     public boolean isDumping = false;
+    List<String> previousTickErrors = new ArrayList<>();
 
     MinecraftClient mc = MinecraftClient.getInstance();
 
@@ -210,6 +211,10 @@ public class BlueIceMiner extends Module {
             .build()
     );
 
+    public void safeError(String message) {
+        if (!previousTickErrors.contains(message)) previousTickErrors.add(message);
+    }
+
     @Override
     public void onActivate() {
         assert mc.world != null;
@@ -274,6 +279,9 @@ public class BlueIceMiner extends Module {
     private void onTick(TickEvent.Pre event) {
         tick++;
 
+        for (String message : previousTickErrors) error(message);
+        previousTickErrors.clear();
+
         // Validity checks
         if (mc.player == null || mc.world == null) {
             return;
@@ -284,7 +292,7 @@ public class BlueIceMiner extends Module {
             return;
         }
 
-        error(state);
+        safeError(state);
         IceHighwayBuilder iceHighwayBuilder = Modules.get().get(IceHighwayBuilder.class);
 
 
@@ -317,7 +325,7 @@ public class BlueIceMiner extends Module {
 
         //Hostile mob elimination methods
         if (killaura()) {
-            error("killaura");
+            safeError("killaura");
             return;
         }
 
@@ -333,7 +341,7 @@ public class BlueIceMiner extends Module {
             }
         }
         if (!state.equals("flyToBlueIce") && pathToTridentDrowned) {
-            error("Moving towards a trident drowned");
+            safeError("Moving towards a trident drowned");
             return;
         }
 
@@ -477,9 +485,9 @@ public class BlueIceMiner extends Module {
                 blueIceSlots++;
                 blueIceTotal += itemStack.getCount();
                 if (itemStack.isEmpty()) {
-                    if (firstEmptySlot == -1) firstEmptySlot = i;
+                    if (firstEmptySlot < 9) firstEmptySlot = i;
                 } else {
-                    if (i > 8 && (firstBlueIceSlot == -1 && mc.player.getInventory().getStack(i).getCount() >= blueIceSlots))
+                    if (firstBlueIceSlot < 9 && mc.player.getInventory().getStack(i).getCount() >= blueIceSlots)
                         firstBlueIceSlot = i;
                 }
             }
@@ -540,16 +548,6 @@ public class BlueIceMiner extends Module {
                         full = true;
                         return true;
                     }
-//                    if (tick % 4 == 1) {
-//                        if (i < 9) {
-//                            InvUtils.quickSwap().fromId(i).toId(toSlot);
-//                        } else {
-//                            InvUtils.move().from(i).to(shulkerSlot);
-//                            error("10: swapped from inventory to shulkerSlot");
-//                        }
-//                    } else {
-//                        InvUtils.quickSwap().fromId(shulkerSlot).toId(toSlot);
-//                    }
                     error("10, i = " + i);
                     int syncId = mc.player.currentScreenHandler.syncId;
                     int handlerSlot = (i < 9) ? i + 54 : i + 18;
@@ -565,7 +563,8 @@ public class BlueIceMiner extends Module {
                 error("blueIceTotal = 0");
                 return false;
             }
-            if (blueIceTotal == blueIceSlots * 64 || remainingShulkers == 0) {
+            int droppedBlueIce = countDroppedItem(mc.player, 10, Items.BLUE_ICE);
+            if (blueIceTotal + droppedBlueIce == blueIceSlots * 64 || remainingShulkers == 0) {
                 if (remainingShulkers > 0) {
                     cancelBaritone();
                     error("cancelBaritone 466");
@@ -644,13 +643,17 @@ public class BlueIceMiner extends Module {
                 }
             } else {
                 scanningWorld2 = true;
-                if (firstEmptySlot != -1 && firstBlueIceSlot != -1) {
+                if (firstEmptySlot > 8 && firstBlueIceSlot != -1) {
                     cancelBaritone();
                     error("cancelBaritone 542");
-                    if (tick % 2 == 0) return true;
+                    if (tick % 2 == 0) {
+                        if (firstBlueIceSlot < 9) InvUtils.quickSwap().fromId(firstBlueIceSlot).toId(9);
+                        return true;
+                    }
                     //spread firstBlueIceSlot to firstEmptySlot
-                    int syncId = mc.player.playerScreenHandler.syncId;
-                    if (firstEmptySlot < 9) firstEmptySlot += 36;
+                    int syncId = mc.player.currentScreenHandler.syncId;
+                    firstBlueIceSlot = convertToHandlerSlot(firstBlueIceSlot);
+                    firstEmptySlot = convertToHandlerSlot(firstEmptySlot);
                     if (returnToSlot) {
                         returnToSlot = false;
                         mc.interactionManager.clickSlot(syncId, firstBlueIceSlot, 0, SlotActionType.PICKUP, mc.player);
@@ -833,7 +836,7 @@ public class BlueIceMiner extends Module {
         assert mc.player != null;
         assert mc.world != null;
         if (countUsablePickaxes() < 1) {
-            error("restockingSilkPicks");
+            safeError("restockingSilkPicks");
             for (int i = 0; i < 36; i++) {
                 ItemStack stack = mc.player.getInventory().getStack(i);
                 if (hasPicksInShulker(stack)) {
@@ -863,7 +866,7 @@ public class BlueIceMiner extends Module {
             }
             return true;
         } else if (wasRestockingSilkPicks) {
-            error("mine_andGatherShulk 758");
+            safeError("mine_andGatherShulk 758");
             return mineAndGatherShulk();
         }
         return false;
@@ -880,14 +883,9 @@ public class BlueIceMiner extends Module {
             }
         }
         Item[] items = getShulkerBoxesNearby();
-        if (areShulkerBoxesNearby()) {
-            for (Item item : items) {
-                if (!isGatheringItems()) {
-                    IceRailGatherItem(item);
-                    return true;
-                }
-                return true;
-            }
+        for (Item item : items) {
+            if (!isGatheringItems()) IceRailGatherItem(item);
+            return true;
         }
         wasRestockingSilkPicks = false;
         return false;
@@ -2256,11 +2254,11 @@ public class BlueIceMiner extends Module {
             if (slice.isEmpty() && !wasTowering && !(mc.player.getY() < slice_minY)) {
                 if (tick % 80 == 0) getBlockGroups(Blocks.BLUE_ICE);
                 if (groups.size() > currentIceberg && (int) groups.get(currentIceberg + 1) > 0 && slice_minY > 46) {
-                    error("Updated slice Y range. Minimum Y: " + slice_minY + ", Maximum Y: " + slice_maxY);
+                    safeError("Updated slice Y range. Minimum Y: " + slice_minY + ", Maximum Y: " + slice_maxY);
                     slice_minY -= sliceHeight.get();
                     slice_maxY -= sliceHeight.get();
                 } else {
-                    error("switching to goToBlueIce");
+                    safeError("switching to goToBlueIce");
                     state = "goToBlueIce";
                     scanningWorld = true;
                     mc.options.attackKey.setPressed(false);
@@ -2269,7 +2267,7 @@ public class BlueIceMiner extends Module {
                 }
             } else {
                 if (slice.isEmpty()) return;
-                error("walking forwards to get more blue ice");
+                safeError("walking forwards to get more blue ice");
                 swapToPickaxe();
                 if (mineObstructingBlocks()) {
                     mc.options.jumpKey.setPressed(false);
@@ -2313,11 +2311,11 @@ public class BlueIceMiner extends Module {
 
             if (previousRangeFirst == null || !previousRangeFirst.equals(range.getFirst())) {
                 if (mineDuration > 8 || previousRangeFirst == null) {
-                    error("Mined block at " + range.getFirst() + " for " + mineDuration + " ticks");
+                    safeError("Mined block at " + range.getFirst() + " for " + mineDuration + " ticks");
                     mineDuration = 0;
                     previousRangeFirst = range.getFirst();
                 } else {
-                    error("caught 2 tick delay between switching target block");
+                    safeError("caught 2 tick delay between switching target block");
                 }
             } else {
                 List<Integer> i = Arrays.asList(0,-1,1,0);
@@ -2325,7 +2323,7 @@ public class BlueIceMiner extends Module {
                     BlockPos target = range.getFirst().up(j);
                     mc.player.setYaw((float) Rotations.getYaw(target));
                     mc.player.setPitch((float) Rotations.getPitch(target));
-                    if (j != 0) error("looked up by " + j + " blocks");
+                    if (j != 0) safeError("looked up by " + j + " blocks");
                     if (getLookingAtBlockPos() != null) {
                         break;
                     }
@@ -2397,7 +2395,7 @@ public class BlueIceMiner extends Module {
             );
         }
         if (conditions.get(0)) {
-            error("mining block in front of portal");
+            safeError("mining block in front of portal");
             switch (getPlayerDirection()) {
                 case NORTH, SOUTH -> {
                     if (!mc.world.getBlockState(target.east(1)).isAir()) {
@@ -2412,12 +2410,12 @@ public class BlueIceMiner extends Module {
             }
             //place the block
         } else if (conditions.get(1)) {
-            error("mining block of portal");
+            safeError("mining block of portal");
             if (!mc.world.getBlockState(target).isAir() && mc.world.getBlockState(target).getBlock() != Blocks.OBSIDIAN) {
                 packetMine(target);
             }
         } else if (conditions.get(2)) {
-            error("placing obsidian of portal");
+            safeError("placing obsidian of portal");
             mc.options.attackKey.setPressed(false);
             if (placeObby) {
                 if (mc.world.getBlockState(target).getBlock() != Blocks.OBSIDIAN) {
