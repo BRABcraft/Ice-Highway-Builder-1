@@ -9,6 +9,7 @@ import meteordevelopment.meteorclient.utils.world.BlockUtils;
 import meteordevelopment.orbit.EventHandler;
 import K_K_L_L.IceRail.addon.IceRail;
 import net.minecraft.block.Blocks;
+import net.minecraft.fluid.Fluids;
 import net.minecraft.item.Item;
 import net.minecraft.item.Items;
 import net.minecraft.util.math.BlockPos;
@@ -58,7 +59,7 @@ public class IcePlacer extends Module {
             for (int y = Y - 1; y <= Y + 4; y++) {
                 for (int z = Z - 2; z <= Z + 2; z++) {
                     BlockPos block = new BlockPos(x, y, z);
-                    if (mc.world.getBlockState(block).getBlock() == Blocks.LAVA) {
+                    if (mc.world.getFluidState(block).getFluid() == Fluids.LAVA) {
                         switchToItem(Items.NETHERRACK);
                         airPlace(block, Direction.DOWN);
                         return true;

@@ -27,6 +27,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.item.*;
 import net.minecraft.network.packet.c2s.play.PlayerInteractBlockC2SPacket;
 import net.minecraft.screen.ScreenHandler;
+import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
@@ -483,6 +484,7 @@ public class IceHighwayBuilder extends Module {
     }
 
     private void handleRestocking() {
+        assert mc.interactionManager != null;
         if (isGatheringItems()) {
             isRestocking = false;
             return;
@@ -570,13 +572,14 @@ public class IceHighwayBuilder extends Module {
             }
             if (restockingType == 1) {
                 for (int j = 0; j < 27; j++) {
-                    ItemStack stack = mc.player.currentScreenHandler.getSlot(j).getStack();
+                    ItemStack stack = handler.getSlot(j).getStack();
                     if (stack.getItem() instanceof PickaxeItem && stack.getDamage() < stack.getMaxDamage() - 50) {
                         slotNumber = j;
+                        int syncId = mc.player.currentScreenHandler.syncId;
+                        mc.interactionManager.clickSlot(syncId, j, t_slot, SlotActionType.SWAP, mc.player);
                         break;
                     }
                 }
-                InvUtils.quickSwap().fromId(t_slot).toId(slotNumber);
                 stacksStolen++;
             }
             else {
@@ -607,7 +610,8 @@ public class IceHighwayBuilder extends Module {
             InvUtils.drop().slot(slot3);
         } else {
             for (int j = 9; j < 36; j++) {
-                if (itemStack.isEmpty() || throwBlacklist.get().contains(itemStack.getItem())) {
+                ItemStack jItemStack = mc.player.getInventory().getStack(j);
+                if (jItemStack.isEmpty() || !throwBlacklist.get().contains(jItemStack.getItem())) {
                     InvUtils.quickSwap().fromId(slot3).toId(j);
                     break;
                 }
@@ -799,11 +803,11 @@ public class IceHighwayBuilder extends Module {
         }
         placeTickCounter++;
 
-        boolean pressBacktrackKeys = placeTickCounter < 20 && placeTickCounter % 10 < 4;
+        boolean pressBacktrackKeys = placeTickCounter < 40 && placeTickCounter % 20 < 8;
         mc.options.backKey.setPressed(pressBacktrackKeys);
         switch(highway.get()) {
-            case East, North -> mc.options.rightKey.setPressed(pressBacktrackKeys);
-            case West, South -> mc.options.leftKey.setPressed(pressBacktrackKeys);
+            case East, North -> mc.options.leftKey.setPressed(pressBacktrackKeys);
+            case West, South -> mc.options.rightKey.setPressed(pressBacktrackKeys);
         }
 
         if (isPostRestocking) {

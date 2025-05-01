@@ -120,6 +120,7 @@ public class BlueIceMiner extends Module {
     public static boolean shouldEnableIceHighwayBuilder = false;
     public boolean isDumping = false;
     List<String> previousTickErrors = new ArrayList<>();
+    List<String> tickErrors = new ArrayList<>();
 
     MinecraftClient mc = MinecraftClient.getInstance();
 
@@ -212,7 +213,7 @@ public class BlueIceMiner extends Module {
     );
 
     public void safeError(String message) {
-        if (!previousTickErrors.contains(message)) previousTickErrors.add(message);
+        if (!previousTickErrors.contains(message)) tickErrors.add(message);
     }
 
     @Override
@@ -279,8 +280,9 @@ public class BlueIceMiner extends Module {
     private void onTick(TickEvent.Pre event) {
         tick++;
 
-        for (String message : previousTickErrors) error(message);
-        previousTickErrors.clear();
+        for (String message : tickErrors) error(message);
+        previousTickErrors = tickErrors;
+        tickErrors.clear();
 
         // Validity checks
         if (mc.player == null || mc.world == null) {
@@ -511,9 +513,9 @@ public class BlueIceMiner extends Module {
         if (state.equals("dumpBlueIce")) {
             //Possible improvement: Use shiftClick() with an ID from 27-63 to dump into shulker.
             cancelBaritone();
-            error("cancelBaritone 400");
+            safeError("cancelBaritone 400");
             scanningWorld2 = true;
-            error("blueIceTotal - 64 < blueIceSlots =  " + (blueIceTotal - 64 < blueIceSlots));
+            safeError("blueIceTotal - 64 < blueIceSlots =  " + (blueIceTotal - 64 < blueIceSlots));
             if (full || blueIceTotal - 64 < blueIceSlots) {
                 if (mineAndGatherShulk()) {
                     error("mine_AndGatherShulk 414");
@@ -527,7 +529,7 @@ public class BlueIceMiner extends Module {
             mc.options.attackKey.setPressed(false);
 
             if (mc.player.currentScreenHandler == mc.player.playerScreenHandler) {
-                error("shulkerBlockPos = " + shulkerBlockPos);
+                safeError("shulkerBlockPos = " + shulkerBlockPos);
                 openShulker();
                 error("8");
                 return true;
@@ -595,6 +597,12 @@ public class BlueIceMiner extends Module {
                     boolean blockIsShulker = mc.world.getBlockState(block).getBlock() instanceof ShulkerBoxBlock ||
                             mc.world.getBlockState(block.down()).getBlock() instanceof ShulkerBoxBlock ;
                     if (!blockIsShulker) {
+                        if (!isAirOrWater(block.up(3))) {
+                            mc.player.setPitch(-90f);
+                            mc.options.attackKey.setPressed(true);
+                            return true;
+                        }
+                        mc.options.attackKey.setPressed(false);
                         mc.options.jumpKey.setPressed(true);
                         if (!BlockUtils.canPlace(block, true)) {
                             error("3");
@@ -657,15 +665,15 @@ public class BlueIceMiner extends Module {
                     if (returnToSlot) {
                         returnToSlot = false;
                         mc.interactionManager.clickSlot(syncId, firstBlueIceSlot, 0, SlotActionType.PICKUP, mc.player);
-                        error("placed down cursor slot at " + firstBlueIceSlot);
+                        //error("placed down cursor slot at " + firstBlueIceSlot);
                     } else if (mc.player.currentScreenHandler.getCursorStack().isEmpty()) {
                         returnToSlot = false;
                         mc.interactionManager.clickSlot(syncId, firstBlueIceSlot, 1, SlotActionType.PICKUP, mc.player);
-                        error("picked up half of blue ice slot at " + firstBlueIceSlot);
+                        //error("picked up half of blue ice slot at " + firstBlueIceSlot);
                     } else {
                         returnToSlot = true;
                         mc.interactionManager.clickSlot(syncId, firstEmptySlot, 1, SlotActionType.PICKUP, mc.player);
-                        error("right clicked cursor slot at " + firstEmptySlot);
+                        //error("right clicked cursor slot at " + firstEmptySlot);
                     }
                     return true;
                 }
@@ -835,7 +843,12 @@ public class BlueIceMiner extends Module {
     private boolean restockSilkPickaxes() {
         assert mc.player != null;
         assert mc.world != null;
+
+        //if (isAirOrWater(mc.player.getBlockPos().down(2))) return false;
+
         if (countUsablePickaxes() < 1) {
+            IceRailAutoReplenish IceRailAutoReplenish = Modules.get().get(IceRailAutoReplenish.class);
+            if (IceRailAutoReplenish.isActive()) IceRailAutoReplenish.toggle();
             safeError("restockingSilkPicks");
             for (int i = 0; i < 36; i++) {
                 ItemStack stack = mc.player.getInventory().getStack(i);
@@ -901,10 +914,10 @@ public class BlueIceMiner extends Module {
         error("894" + mc.world.getBlockState(block).getBlock());
         if (!blockIsShulker) {
             mc.options.jumpKey.setPressed(true);
-//            if (!BlockUtils.canPlace(block, true)) {
-//                error("cannot place");
-//                return true;
-//            }
+            if (!BlockUtils.canPlace(block, true)) {
+                error("cannot place");
+                return true;
+            }
             mc.player.setPitch(90.0f);
             place(block, Hand.MAIN_HAND, shulkerSlot, true, true, true);
             hasOpenedShulker = false;
@@ -2218,6 +2231,9 @@ public class BlueIceMiner extends Module {
         assert mc.world != null;
         range = getBlueIceInRange();
         slice = getIcebergSlice();
+
+        IceRailAutoReplenish IceRailAutoReplenish = Modules.get().get(IceRailAutoReplenish.class);
+        if (!IceRailAutoReplenish.isActive()) IceRailAutoReplenish.toggle();
 
         //Air is on a scale of 0-300
         if (mc.player.getAir() < 30 || wasBreathing) {
