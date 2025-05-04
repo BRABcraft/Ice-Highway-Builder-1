@@ -83,20 +83,21 @@ public class IceRailNuker extends Module {
         if (mc.player == null) return null;
         int Z = mc.player.getBlockZ();
         int X = mc.player.getBlockX();
+        IceHighwayBuilder i = Modules.get().get(IceHighwayBuilder.class);
         if (!loweringFloor.get()) {
-            return switch (getPlayerDirection()) {
-                case NORTH -> new BlockPos(playerX + 1, playerY,  Z + 2 - Math.abs(Z) % 2);
-                case SOUTH -> new BlockPos(playerX + 1, playerY, Z - 2 + Math.abs(Z) % 2);
-                case EAST -> new BlockPos(X + 2 - Math.abs(X) % 2, playerY, playerZ - 1);
-                case WEST -> new BlockPos(X - 2 + Math.abs(X) % 2, playerY, playerZ - 1);
+            return switch (i.highway.get()) {
+                case North -> new BlockPos(playerX + 1, playerY,  Z - 2 + Math.abs(Z) % 2);
+                case South -> new BlockPos(playerX + 1, playerY, Z + 2 - Math.abs(Z) % 2);
+                case East -> new BlockPos(X + 2 - Math.abs(X) % 2, playerY, playerZ - 1);
+                case West -> new BlockPos(X - 2 + Math.abs(X) % 2, playerY, playerZ - 1);
                 default -> new BlockPos(0, 64, 0); // This shouldn't happen
             };
         } else {
-            return switch (getPlayerDirection()) {
-                case NORTH -> new BlockPos(playerX + 1, playerY,  Z + 3);
-                case SOUTH -> new BlockPos(playerX + 1, playerY, Z - 3);
-                case EAST -> new BlockPos(X + 3, playerY, playerZ - 1);
-                case WEST -> new BlockPos(X - 3, playerY, playerZ - 1);
+            return switch (i.highway.get()) {
+                case North -> new BlockPos(playerX + 1, playerY,  Z - 3);
+                case South -> new BlockPos(playerX + 1, playerY, Z + 3);
+                case East -> new BlockPos(X + 3, playerY, playerZ - 1);
+                case West -> new BlockPos(X - 3, playerY, playerZ - 1);
                 default -> new BlockPos(0, 64, 0); // This shouldn't happen
             };
         }
@@ -104,12 +105,13 @@ public class IceRailNuker extends Module {
 
     private BlockPos getRegion1End() {
         if (mc.player == null) return null;
+        IceHighwayBuilder i = Modules.get().get(IceHighwayBuilder.class);
 
-        return switch (getPlayerDirection()) {
-            case NORTH -> new BlockPos(playerX, playerY + 4, mc.player.getBlockZ() - 4);
-            case SOUTH -> new BlockPos(playerX, playerY + 4, mc.player.getBlockZ() + 4);
-            case EAST -> new BlockPos(mc.player.getBlockX() - 4, playerY + 4, playerZ);
-            case WEST -> new BlockPos(mc.player.getBlockX() + 4, playerY + 4, playerZ);
+        return switch (i.highway.get()) {
+            case North -> new BlockPos(playerX, playerY + 4, mc.player.getBlockZ() + 4);
+            case South -> new BlockPos(playerX, playerY + 4, mc.player.getBlockZ() - 4);
+            case East -> new BlockPos(mc.player.getBlockX() - 4, playerY + 4, playerZ);
+            case West -> new BlockPos(mc.player.getBlockX() + 4, playerY + 4, playerZ);
             default -> new BlockPos(0, 64, 0); // This shouldn't happen
         };
     }

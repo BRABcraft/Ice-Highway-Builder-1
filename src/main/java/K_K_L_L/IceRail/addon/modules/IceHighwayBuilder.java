@@ -807,8 +807,8 @@ public class IceHighwayBuilder extends Module {
         boolean isStuck = mc.player.getVelocity().z == 0 && mc.player.getVelocity().x == 0 && tick % 20 < 8;
         mc.options.backKey.setPressed(pressBacktrackKeys);
         switch(highway.get()) {
-            case East, North -> mc.options.leftKey.setPressed(pressBacktrackKeys || isStuck);
-            case West, South -> mc.options.rightKey.setPressed(pressBacktrackKeys || isStuck);
+            case East, South -> mc.options.leftKey.setPressed(pressBacktrackKeys || isStuck);
+            case West, North -> mc.options.rightKey.setPressed(pressBacktrackKeys || isStuck);
         }
 
         if (isPostRestocking) {
@@ -1157,19 +1157,17 @@ public class IceHighwayBuilder extends Module {
         assert mc.player != null;
         mc.player.setPitch(0);
 
-        Direction direction = getPlayerDirection();
-
-        switch (direction) {
-            case Direction.NORTH:
-                mc.player.setYaw(135);
-                break;
-            case Direction.EAST:
+        switch (highway.get()) {
+            case North:
                 mc.player.setYaw(-135);
                 break;
-            case Direction.WEST:
-                mc.player.setYaw(45);
+            case East:
+                mc.player.setYaw(-135);
                 break;
-            case Direction.SOUTH:
+            case West:
+                mc.player.setYaw(135);
+                break;
+            case South:
                 mc.player.setYaw(-45);
                 break;
         }

@@ -109,17 +109,19 @@ public class ScaffoldGrim extends Module {
     private void line(int shift, int raise, boolean skipOdd) {
         assert mc.player != null;
         BlockPos playerPos = mc.player.getBlockPos();
-        for (int offset = 1; offset <= 4; offset++) {
-            BlockPos targetPos = switch (playerDirection) {
-                case NORTH -> playerPos.add(-shift, raise, -offset);
-                case SOUTH -> playerPos.add(shift, raise, offset);
-                case EAST -> playerPos.add(offset, raise, shift);
-                case WEST -> playerPos.add(-offset, raise, -shift);
+        for (int offset = 0; offset <= 3; offset++) {
+            IceHighwayBuilder i = Modules.get().get(IceHighwayBuilder.class);
+            BlockPos targetPos = switch (i.highway.get()) {
+                case North -> playerPos.add(-shift, raise, -offset);
+                case South -> playerPos.add(shift, raise, offset);
+                case East -> playerPos.add(offset, raise, shift);
+                case West -> playerPos.add(-offset, raise, -shift);
                 default -> null;
             };
-            boolean shouldPlace = switch (playerDirection) {
-                case NORTH, SOUTH -> targetPos.getZ() % 2 == 0;
-                case EAST, WEST -> targetPos.getX() % 2 == 0;
+            assert targetPos != null;
+            boolean shouldPlace = switch (i.highway.get()) {
+                case North, South -> targetPos.getZ() % 2 == 0;
+                case East, West -> targetPos.getX() % 2 == 0;
                 default -> false;
             };
             if (skipOdd && !shouldPlace) continue;
