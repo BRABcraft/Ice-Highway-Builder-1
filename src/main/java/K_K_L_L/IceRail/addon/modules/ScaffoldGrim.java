@@ -77,8 +77,6 @@ public class ScaffoldGrim extends Module {
         if (mc.player == null) return;
         assert mc.world != null;
         tickCounter++;
-        Direction playerDirection;
-        BlockPos playerPos = mc.player.getBlockPos();
 
         // Only place a block every 3 ticks to avoid rubberband
         if (tickCounter % 4 != 0) return;
@@ -101,14 +99,30 @@ public class ScaffoldGrim extends Module {
         }
 
         if (item == null) return;
+        line(0, -1, false);
+//        line(1, -1, false);
+//        line(-1, 2, false);
+//        line(2, 2, false);
+//        line(-1, 1, true);
+    }
+
+    private void line(int shift, int raise, boolean skipOdd) {
+        assert mc.player != null;
+        BlockPos playerPos = mc.player.getBlockPos();
         for (int offset = 1; offset <= 4; offset++) {
             BlockPos targetPos = switch (playerDirection) {
-                case NORTH -> playerPos.add(0, -1, -offset);
-                case SOUTH -> playerPos.add(0, -1, offset);
-                case EAST -> playerPos.add(offset, -1, 0);
-                case WEST -> playerPos.add(-offset, -1, 0);
+                case NORTH -> playerPos.add(-shift, raise, -offset);
+                case SOUTH -> playerPos.add(shift, raise, offset);
+                case EAST -> playerPos.add(offset, raise, shift);
+                case WEST -> playerPos.add(-offset, raise, -shift);
                 default -> null;
             };
+            boolean shouldPlace = switch (playerDirection) {
+                case NORTH, SOUTH -> targetPos.getZ() % 2 == 0;
+                case EAST, WEST -> targetPos.getX() % 2 == 0;
+                default -> false;
+            };
+            if (skipOdd && !shouldPlace) continue;
 
             if (targetPos == null) return;
             if (mc.getNetworkHandler() == null) return;
