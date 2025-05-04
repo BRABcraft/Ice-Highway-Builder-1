@@ -158,7 +158,7 @@ public class Utils {
 
         Hand hand = Hand.OFF_HAND;
         BlockHitResult hit = new BlockHitResult(Vec3d.ofCenter(pos), direction.getOpposite(), pos, true);
-
+        if (hit.getBlockPos() != pos) return false;
         mc.interactionManager.interactBlock(mc.player, hand, hit);
         mc.player.swingHand(hand, false);
         mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.SWAP_ITEM_WITH_OFFHAND, BlockPos.ORIGIN, direction));

@@ -344,7 +344,13 @@ public class IceRailAutoReplenish extends Module {
         int slot = foodSlot.get();
         Item desiredItem = Items.AIR;
         if (foodSlotItem.equals("gapple")) {
-            desiredItem = Items.ENCHANTED_GOLDEN_APPLE;
+            for (int i = 9; i < 36; i++) {
+                ItemStack stack = mc.player.getInventory().getStack(i);
+                if (stack.getItem() == Items.ENCHANTED_GOLDEN_APPLE) {
+                    InvUtils.quickSwap().fromId(slot).toId(i);
+                    break;
+                }
+            }
         } else {
             for (int i = 0; i < 36; i++) {
                 ItemStack stack = mc.player.getInventory().getStack(i);

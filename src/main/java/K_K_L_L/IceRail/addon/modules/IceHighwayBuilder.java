@@ -804,10 +804,11 @@ public class IceHighwayBuilder extends Module {
         placeTickCounter++;
 
         boolean pressBacktrackKeys = placeTickCounter < 40 && placeTickCounter % 20 < 8;
+        boolean isStuck = mc.player.getVelocity().z == 0 && mc.player.getVelocity().x == 0 && tick % 20 < 8;
         mc.options.backKey.setPressed(pressBacktrackKeys);
         switch(highway.get()) {
-            case East, North -> mc.options.leftKey.setPressed(pressBacktrackKeys);
-            case West, South -> mc.options.rightKey.setPressed(pressBacktrackKeys);
+            case East, North -> mc.options.leftKey.setPressed(pressBacktrackKeys || isStuck);
+            case West, South -> mc.options.rightKey.setPressed(pressBacktrackKeys || isStuck);
         }
 
         if (isPostRestocking) {
@@ -827,9 +828,9 @@ public class IceHighwayBuilder extends Module {
         if (countItems(Items.BLUE_ICE) <= 8) {
             toggleIcePlacerAndNuker(false);
             ItemStack BlueIceShulker = findBestBlueIceShulker();
-
+            BlueIceMiner b = Modules.get().get(BlueIceMiner.class);
             if (BlueIceShulker == null && !isPlacingShulker) {
-                if (enableBlueIceMiner.get()) {
+                if (enableBlueIceMiner.get() && PlayerUtils.isWithin(0.0,114.0,0.0, b.minDistanceToSpawn.get())) {
                     if (BlueIceMiner.state.equals("idle")) {
                         Module blueIceMiner = Modules.get().get("blue-ice-miner");
                         if (!blueIceMiner.isActive()) blueIceMiner.toggle();

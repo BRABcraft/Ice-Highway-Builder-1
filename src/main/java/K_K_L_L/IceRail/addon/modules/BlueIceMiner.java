@@ -139,7 +139,7 @@ public class BlueIceMiner extends Module {
             .defaultValue(true)
             .build()
     );
-    private final Setting<Integer> minDistanceToSpawn = sgToggle.add(new IntSetting.Builder()
+    public final Setting<Integer> minDistanceToSpawn = sgToggle.add(new IntSetting.Builder()
             .name("min-distance-to-spawn")
             .description("Minimum nether distance from spawn that Auto Toggle will turn on to avoid old chunks.")
             .defaultValue(30000)
@@ -486,12 +486,6 @@ public class BlueIceMiner extends Module {
             if (itemStack.getItem().equals(Items.BLUE_ICE) || itemStack.isEmpty()) {
                 blueIceSlots++;
                 blueIceTotal += itemStack.getCount();
-                if (itemStack.isEmpty()) {
-                    if (firstEmptySlot < 9) firstEmptySlot = i;
-                } else {
-                    if (firstBlueIceSlot < 9 && mc.player.getInventory().getStack(i).getCount() >= blueIceSlots)
-                        firstBlueIceSlot = i;
-                }
             }
             if (itemStack.getItem() instanceof BlockItem &&
                     ((BlockItem) itemStack.getItem()).getBlock() instanceof ShulkerBoxBlock) {
@@ -507,6 +501,15 @@ public class BlueIceMiner extends Module {
                 if (found) {
                     remainingShulkers++;
                 }
+            }
+        }
+        for (int i = 0; i < 36; i++) {
+            ItemStack itemStack = mc.player.getInventory().getStack(i);
+            if (itemStack.isEmpty()) {
+                if (firstEmptySlot < 9) firstEmptySlot = i;
+            } else {
+                if (firstBlueIceSlot < 9 && mc.player.getInventory().getStack(i).getCount() >= blueIceSlots)
+                    firstBlueIceSlot = i;
             }
         }
 
@@ -566,7 +569,7 @@ public class BlueIceMiner extends Module {
                 return false;
             }
             int droppedBlueIce = countDroppedItem(mc.player, 10, Items.BLUE_ICE);
-            if (blueIceTotal + droppedBlueIce == blueIceSlots * 64 || remainingShulkers == 0) {
+            if (blueIceTotal + droppedBlueIce >= blueIceSlots * 64 || remainingShulkers == 0) {
                 if (remainingShulkers > 0) {
                     cancelBaritone();
                     error("cancelBaritone 466");
