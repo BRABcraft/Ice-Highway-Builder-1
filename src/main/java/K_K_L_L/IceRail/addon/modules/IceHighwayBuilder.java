@@ -19,6 +19,7 @@ import meteordevelopment.meteorclient.utils.player.PlayerUtils;
 import meteordevelopment.meteorclient.utils.player.Rotations;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.meteorclient.utils.world.BlockUtils;
+import meteordevelopment.meteorclient.utils.world.TickRate;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
@@ -117,6 +118,12 @@ public class IceHighwayBuilder extends Module {
     private final Setting<Boolean> enableAutoEat = sgEnable.add(new BoolSetting.Builder()
             .name("enable-auto-eat")
             .description("Pauses the current task and automatically eats.")
+            .defaultValue(true)
+            .build()
+    );
+    public final Setting<Boolean> enableIcePlacer = sgEnable.add(new BoolSetting.Builder()
+            .name("enable-ice-placer")
+            .description("Places blue ice and skips every other block")
             .defaultValue(true)
             .build()
     );
@@ -341,6 +348,12 @@ public class IceHighwayBuilder extends Module {
             .defaultValue(false)
             .build()
     );
+    public final Setting<Boolean> oneActionPerTick = sgIcePlacer.add(new BoolSetting.Builder()
+            .name("one-action-per-tick")
+            .description("Only places one block per tick to avoid disconnecting.")
+            .defaultValue(true)
+            .build()
+    );
     public final Setting<Boolean> nukerPacketMine = sgIceRailNuker.add(new BoolSetting.Builder()
             .name("packet-mine")
             .description("Attempt to instamine everything at once.")
@@ -525,6 +538,10 @@ public class IceHighwayBuilder extends Module {
         }
 
         if (!(mc.world.getBlockState(shulkerBlockPos).getBlock() instanceof ShulkerBoxBlock)) {
+            if (!mc.world.getBlockState(shulkerBlockPos).isAir()) {
+                BlockUtils.breakBlock(shulkerBlockPos, true);
+                return;
+            }
             if (BlockUtils.canPlace(shulkerBlockPos, false) && !BlockUtils.canPlace(shulkerBlockPos, true)) return;
             place(shulkerBlockPos, Hand.MAIN_HAND, s_slot, true, true, true);
             return;
@@ -580,7 +597,7 @@ public class IceHighwayBuilder extends Module {
                         break;
                     }
                 }
-                stacksStolen++;
+                if (countUsablePickaxes() > 0) stacksStolen++;
             }
             else {
                 if (handler.getSlot(slotNumber).getStack().getItem() == Items.BLUE_ICE) steal(handler, slotNumber);
@@ -767,6 +784,12 @@ public class IceHighwayBuilder extends Module {
             return;
         }
         if (!BlueIceMiner.shouldEnableIceHighwayBuilder && mc.world.getDimension().bedWorks()) return;
+//        double tps = TickRate.INSTANCE.getTickRate();
+//        if (Math.abs(20-tps) > 2.5) {
+//            error("pause due to low tps");
+//            return;
+//        }
+
         if (iceRailAutoEat != null) {
             BoolSetting amountSetting = (BoolSetting) iceRailAutoEat.settings.get("eat-egap-when-burning");
             if (amountSetting != null) amountSetting.set(eatEGaps.get());
@@ -830,7 +853,7 @@ public class IceHighwayBuilder extends Module {
             ItemStack BlueIceShulker = findBestBlueIceShulker();
             BlueIceMiner b = Modules.get().get(BlueIceMiner.class);
             if (BlueIceShulker == null && !isPlacingShulker) {
-                if (enableBlueIceMiner.get() && PlayerUtils.isWithin(0.0,114.0,0.0, b.minDistanceToSpawn.get())) {
+                if (enableBlueIceMiner.get() && !PlayerUtils.isWithin(0.0,114.0,0.0, b.minDistanceToSpawn.get())) {
                     if (BlueIceMiner.state.equals("idle")) {
                         Module blueIceMiner = Modules.get().get("blue-ice-miner");
                         if (!blueIceMiner.isActive()) blueIceMiner.toggle();

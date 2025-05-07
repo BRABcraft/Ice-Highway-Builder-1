@@ -12,7 +12,9 @@ import meteordevelopment.meteorclient.utils.player.FindItemResult;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.meteorclient.utils.world.BlockUtils;
 import net.minecraft.block.Block;
+import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.fluid.Fluids;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.Items;
@@ -132,7 +134,9 @@ public class ScaffoldGrim extends Module {
             if (mc.world.getBlockState(targetPos).getBlock() == Blocks.SOUL_SAND) {
                 BlockUtils.breakBlock(targetPos, true);
             }
-            if (mc.world.getBlockState(targetPos).isAir()) {
+            BlockState blockstate = mc.world.getBlockState(targetPos);
+            Block block = blockstate.getBlock();
+            if (blockstate.isAir() || block == Blocks.FIRE || !mc.world.getFluidState(targetPos).isEmpty()) {
                 //InvUtils.swap(InvUtils.findInHotbar(itemStack -> itemStack.getItem() == Items.NETHERRACK).slot(), false);
                 airPlace(Items.NETHERRACK, targetPos, Direction.DOWN);
             }

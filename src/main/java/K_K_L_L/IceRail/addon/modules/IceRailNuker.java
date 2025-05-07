@@ -83,21 +83,22 @@ public class IceRailNuker extends Module {
         if (mc.player == null) return null;
         int Z = mc.player.getBlockZ();
         int X = mc.player.getBlockX();
+        int Y = mc.player.getBlockY();
         IceHighwayBuilder i = Modules.get().get(IceHighwayBuilder.class);
         if (!loweringFloor.get()) {
             return switch (i.highway.get()) {
-                case North -> new BlockPos(playerX + 1, playerY,  Z - 2 + Math.abs(Z) % 2);
-                case South -> new BlockPos(playerX + 1, playerY, Z + 2 - Math.abs(Z) % 2);
-                case East -> new BlockPos(X + 2 - Math.abs(X) % 2, playerY, playerZ - 1);
-                case West -> new BlockPos(X - 2 + Math.abs(X) % 2, playerY, playerZ - 1);
+                case North -> new BlockPos(X + 1, Y,  Z - 2 + Math.abs(Z) % 2);
+                case South -> new BlockPos(X + 1, Y, Z + 2 - Math.abs(Z) % 2);
+                case East -> new BlockPos(X + 2 - Math.abs(X) % 2, Y, Z - 1);
+                case West -> new BlockPos(X - 2 + Math.abs(X) % 2, Y, Z - 1);
                 default -> new BlockPos(0, 64, 0); // This shouldn't happen
             };
         } else {
             return switch (i.highway.get()) {
-                case North -> new BlockPos(playerX + 1, playerY,  Z - 3);
-                case South -> new BlockPos(playerX + 1, playerY, Z + 3);
-                case East -> new BlockPos(X + 3, playerY, playerZ - 1);
-                case West -> new BlockPos(X - 3, playerY, playerZ - 1);
+                case North -> new BlockPos(X + 1, Y,  Z - 3);
+                case South -> new BlockPos(X + 1, Y, Z + 3);
+                case East -> new BlockPos(X + 3, Y, Z - 1);
+                case West -> new BlockPos(X - 3, Y, Z - 1);
                 default -> new BlockPos(0, 64, 0); // This shouldn't happen
             };
         }
@@ -105,13 +106,16 @@ public class IceRailNuker extends Module {
 
     private BlockPos getRegion1End() {
         if (mc.player == null) return null;
+        int Z = mc.player.getBlockZ();
+        int X = mc.player.getBlockX();
+        int Y = mc.player.getBlockY();
         IceHighwayBuilder i = Modules.get().get(IceHighwayBuilder.class);
 
         return switch (i.highway.get()) {
-            case North -> new BlockPos(playerX, playerY + 4, mc.player.getBlockZ() + 4);
-            case South -> new BlockPos(playerX, playerY + 4, mc.player.getBlockZ() - 4);
-            case East -> new BlockPos(mc.player.getBlockX() - 4, playerY + 4, playerZ);
-            case West -> new BlockPos(mc.player.getBlockX() + 4, playerY + 4, playerZ);
+            case North -> new BlockPos(X, Y + 4, Z + 4);
+            case South -> new BlockPos(X, Y + 4, Z - 4);
+            case East -> new BlockPos(X - 4, Y + 4, Z);
+            case West -> new BlockPos(X + 4, Y + 4, Z);
             default -> new BlockPos(0, 64, 0); // This shouldn't happen
         };
     }

@@ -8,14 +8,13 @@ import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.meteorclient.utils.world.BlockUtils;
 import meteordevelopment.orbit.EventHandler;
 import K_K_L_L.IceRail.addon.IceRail;
-import net.minecraft.block.Blocks;
+import net.minecraft.block.Block;
 import net.minecraft.fluid.Fluids;
+import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.Items;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
-import net.minecraft.fluid.FluidState;
-import net.minecraft.block.BlockState;
 
 import static K_K_L_L.IceRail.addon.Utils.airPlace;
 import static K_K_L_L.IceRail.addon.Utils.switchToItem;
@@ -32,21 +31,40 @@ public class IcePlacer extends Module {
     IceHighwayBuilder iceHighwayBuilder = Modules.get().get(IceHighwayBuilder.class);
     Setting<Boolean> airPlaceBlueIce = iceHighwayBuilder.airPlaceBlueIce;
 
-    private boolean place(Item item, BlockPos blockPos, boolean onlyOnLava) {
+    private boolean place(Item item, BlockPos blockPos) {
         assert mc.world != null;
-        boolean condition = onlyOnLava ? !mc.world.getBlockState(blockPos).getFluidState().isEmpty() : mc.world.isAir(blockPos);
-        if (condition) {
-            switchToItem(item);
-//            airPlace(blockPos, switch (getPlayerDirection()) {
-//                case NORTH, SOUTH -> Direction.EAST;
-//                case EAST, WEST -> Direction.NORTH;
-//                default -> null;
-//            });
+        if (mc.world.isAir(blockPos)) {
+            safeSwitchToItem(item);
             mc.options.attackKey.setPressed(false);
             airPlace(blockPos, Direction.DOWN);
             return true;
         }
         return false;
+    }
+
+    private void safeSwitchToItem(Item item) {
+        assert mc.player != null;
+        switchToItem(item);
+        if (item != mc.player.getMainHandStack().getItem()) {
+            for (int i = 0; i < 36; i++) {
+                ScaffoldGrim s = Modules.get().get(ScaffoldGrim.class);
+                IceRailAutoReplenish a = Modules.get().get(IceRailAutoReplenish.class);
+                Item slotItem = mc.player.getInventory().getStack(i).getItem();
+                boolean isValidItem;
+                if (slotItem instanceof BlockItem blockItem) {
+                    Block block = blockItem.getBlock();
+                    if (s.blocksFilter.get() == ScaffoldGrim.ListMode.Blacklist)
+                        isValidItem = !s.blocks.get().contains(block);
+                    else
+                        isValidItem = s.blocks.get().contains(block);
+
+                    if (isValidItem) {
+                        if (i > 8) InvUtils.quickSwap().fromId(a.scaffoldSlot.get()).toId(i);
+                        switchToItem(slotItem);
+                    }
+                }
+            }
+        }
     }
 
     private boolean sourceRemover() {
@@ -55,9 +73,9 @@ public class IcePlacer extends Module {
         int X = mc.player.getBlockX();
         int Y = mc.player.getBlockY();
         int Z = mc.player.getBlockZ();
-        for (int x = X - 2; x <= X + 1; x++) {
+        for (int x = X - 3; x <= X + 3; x++) {
             for (int y = Y - 1; y <= Y + 4; y++) {
-                for (int z = Z - 2; z <= Z + 2; z++) {
+                for (int z = Z - 3; z <= Z + 3; z++) {
                     BlockPos block = new BlockPos(x, y, z);
                     if (mc.world.getFluidState(block).getFluid() == Fluids.LAVA) {
                         switchToItem(Items.NETHERRACK);
@@ -77,6 +95,7 @@ public class IcePlacer extends Module {
         //if (tick % 3 < 2) return;
         IceHighwayBuilder IceHighwayBuilder = Modules.get().get(IceHighwayBuilder.class);
         if (!IceHighwayBuilder.isActive()) return;
+        if (!IceHighwayBuilder.enableIcePlacer.get()) return;
         playerX = mc.player.getBlockX();
         playerY = mc.player.getBlockY();
         playerZ = mc.player.getBlockZ();
@@ -125,14 +144,13 @@ public class IcePlacer extends Module {
             }
         }
         if (sourceRemover()) return;
-        if (place(Items.NETHERRACK, guardrail1, false)) return;
-        if (place(Items.NETHERRACK, guardrail2, false)) return;
-        if (place(Items.NETHERRACK, guardrail1.up(-1), true)) return;
-        if (place(Items.NETHERRACK, guardrail2.up(-1), true)) return;
+        boolean oneActionPerTick = IceHighwayBuilder.oneActionPerTick.get();
+        if (place(Items.NETHERRACK, guardrail1) && oneActionPerTick) return;
+        if (place(Items.NETHERRACK, guardrail2) && oneActionPerTick) return;
         if (shouldPlace) {
-            if (place(Items.NETHERRACK, targetPos2, false)) return;
-            if (airPlaceBlueIce.get()) {
-                place(Items.BLUE_ICE, targetPos, false);
+            place(Items.NETHERRACK, targetPos2);
+            if (airPlaceBlueIce.get()/* || IceHighwayBuilder.placeTickCounter < 40*/) {
+                place(Items.BLUE_ICE, targetPos);
             } else {
                 if (mc.world.isAir(targetPos)) switchToItem(Items.BLUE_ICE);
                 BlockUtils.place(targetPos, InvUtils.findInHotbar(itemStack ->
